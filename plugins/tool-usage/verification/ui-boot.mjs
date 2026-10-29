@@ -213,7 +213,6 @@ try {
     check('served client bundle responds 200', bundleResponse.status === 200, `status ${String(bundleResponse.status)}`)
     check('served bundle carries the module-loader id', bundle.includes(`id: '${PACKAGE_NAME}'`))
     for (const slot of [
-      'conversation.chat.turnTail',
       'conversation.view',
       'sidebar.right.pane.tab',
       'conversation.session.header.actions',

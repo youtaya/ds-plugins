@@ -716,39 +716,31 @@ test('bundle uses the loader format, requires only react, and exposes inject/app
   assert.equal(typeof client.plugin.apply, 'function');
 });
 
-test('apply registers the two conversation entries, the sidebar body, and the header action', () => {
+test('apply registers the conversation dashboard, the sidebar body, and the header action', () => {
   const applied = applyPlugin();
   assert.deepEqual(applied.injections, [
-    'conversation.chat.turnTail',
     'conversation.view',
     'sidebar.right.pane.tab',
     'conversation.session.header.actions',
   ]);
-  assert.equal(applied.registrations.length, 4);
-  const expected = [
-    ['conversation.chat.turnTail', 'tool-usage-summary', 5],
-    ['conversation.view', 'tool-usage-calls', 20],
-  ];
-  expected.forEach(([name, id, order], index) => {
-    const entry = applied.registrations[index];
-    assert.equal(entry.options.name, name);
-    assert.equal(entry.options.id, id);
-    assert.equal(entry.options.order, order);
-    assert.equal(entry.options.locale, 'tool-usage-ui');
-    assert.equal(typeof entry.component, 'function');
-  });
-  const view = applied.registrations[1].options;
-  assert.equal(typeof view.label, 'function');
-  assert.equal(view.label(), '调用看板');
+  assert.equal(applied.registrations.length, 3);
+  const dashboard = applied.registrations[0];
+  assert.equal(dashboard.options.name, 'conversation.view');
+  assert.equal(dashboard.options.id, 'tool-usage-calls');
+  assert.equal(dashboard.options.order, 20);
+  assert.equal(dashboard.options.locale, 'tool-usage-ui');
+  assert.equal(typeof dashboard.component, 'function');
+  assert.equal(typeof dashboard.options.label, 'function');
+  assert.equal(dashboard.options.label(), '调用看板');
 
   // Keyed right-Sidebar body under the tab definition's id.
-  const body = applied.registrations[2];
+  const body = applied.registrations[1];
   assert.equal(body.options.name, 'sidebar.right.pane.tab');
   assert.equal(body.options.key, 'dsh-plugin-tool-usage-stream');
   assert.equal(body.options.locale, 'tool-usage-ui');
   assert.equal(typeof body.component, 'function');
   // Header action can reopen the tab manually.
-  const headerAction = applied.registrations[3];
+  const headerAction = applied.registrations[2];
   assert.equal(headerAction.options.name, 'conversation.session.header.actions');
   assert.equal(headerAction.options.id, 'tool-usage-stream');
   assert.equal(headerAction.options.order, 30);
@@ -779,9 +771,8 @@ test('apply registers the two conversation entries, the sidebar body, and the he
 
 test('a profile without the right sidebar keeps the conversation entries', () => {
   const applied = applyPlugin({ withSidebar: false });
-  assert.equal(applied.registrations.length, 2);
+  assert.equal(applied.registrations.length, 1);
   assert.deepEqual(applied.injections, [
-    'conversation.chat.turnTail',
     'conversation.view',
   ]);
   assert.equal(applied.registeredTypes.length, 0);
@@ -798,12 +789,14 @@ test('locale namespace has complete, parallel zh and en dictionaries', () => {
   assert.ok(zhKeys.length >= 72, `expected a complete dictionary, got ${zhKeys.length} keys`);
   assert.equal(applied.dicts.zh['view.label'], '调用看板');
   assert.equal(applied.dicts.en['view.label'], 'Calls');
-  assert.equal(applied.dicts.zh['summary.footer'],
-    '在会话顶部「调用看板」查看整个会话的统计。');
   assert.equal(applied.dicts.zh['stream.tabTitle'], '调用流');
   assert.equal(applied.dicts.en['stream.tabTitle'], 'Calls stream');
   assert.equal(applied.dicts.zh['stream.fallback.bash'], '执行 Shell 命令：{command}');
   assert.equal(applied.dicts.en['stream.fallback.bash'], 'Run shell command: {command}');
+  assert.equal(applied.dicts.zh['stream.purpose.label'], '目的');
+  assert.equal(applied.dicts.en['stream.purpose.label'], 'Purpose');
+  assert.equal(applied.dicts.zh['stream.purpose.bash'], '执行 Shell 命令');
+  assert.equal(applied.dicts.en['stream.purpose.other'], 'Call tool {tool}');
 });
 
 test('stream header action auto-opens the stream once when the session starts running', () => {
@@ -854,12 +847,15 @@ test('stream body renders projection rows newest first with a live ticking heade
     '实时',
     '共 9 次调用',
     '第 2 轮',
+    '目的',
     '启动服务',
     'pnpm dev',
     '搜索用法',
     '运行测试',
     '600ms', // r4 elapsed at the fake clock
   ]);
+  // A missing Host summary falls back to the localized tool-purpose copy.
+  assert.ok(text.includes('搜索文本'), 'empty summaries must use the grep purpose fallback');
   // Running rows first (newest start first), then settled rows newest end first.
   assert.ok(text.indexOf('额外命令') < text.indexOf('搜索用法'),
     'running rows must stay at the top of the stream');
@@ -907,6 +903,7 @@ test('stream body falls back to the Chat legacy slice without a projection', () 
     '实时',
     '共 5 次调用',
     '第 2 轮',
+    '目的',
     '执行 Shell 命令：pnpm test',
     '读取文件 src/index.ts',
     '搜索内容 openStream',
@@ -937,6 +934,7 @@ test('stream body fallback speaks English', () => {
   assertIncludes(text, [
     'Calls stream',
     'Live',
+    'Purpose',
     '5 calls',
     'Run shell command: pnpm test',
     'Read file src/index.ts',
@@ -954,88 +952,6 @@ test('stream body shows its empty state', () => {
   assert.equal(streamRows(mounted.harness.tree).length, 0);
   assertNoMissingKeys(mounted.translate);
   mounted.harness.dispose();
-});
-
-test('per-turn card shows the turn dashboard, expanded on demand', () => {
-  const applied = applyPlugin();
-  const view = makeView();
-  const { harness, translate } = mountComponent(applied, 'tool-usage-summary', {
-    view,
-    turn: 1,
-  });
-  const collapsed = textOf(harness.tree);
-  assertIncludes(collapsed, [
-    '工具调用看板 · 第 1 轮',
-    '已完成',
-    '调用次数',
-    '失败次数',
-    '总耗时',
-    '平均耗时',
-    '工具种类',
-    '1.5s', // total duration
-    '750ms', // average of this turn's settled calls
-    'Shell 命令 1 条',
-    '查看 2 次调用明细',
-    '在会话顶部「调用看板」查看整个会话的统计。',
-  ]);
-  // Per-tool bars for this turn.
-  assertIncludes(collapsed, ['bash', 'read_file']);
-  // Per-turn call counts: 2 calls, 0 failures, 2 distinct tools.
-  assert.match(collectClassText(harness.tree, 'tu-chip', '调用次数'), /调用次数 2/);
-  assert.match(collectClassText(harness.tree, 'tu-chip', '失败次数'), /失败次数 0/);
-  assert.match(collectClassText(harness.tree, 'tu-chip', '工具种类'), /工具种类 2/);
-  // Details are collapsed by default.
-  assertExcludes(collapsed, ['pnpm install', '读取配置']);
-  clickButton(harness.tree, '查看 2 次调用明细');
-  harness.rerender();
-  const opened = textOf(harness.tree);
-  assertIncludes(opened, ['收起调用明细', '安装依赖', 'pnpm install', '读取配置']);
-  assertNoMissingKeys(translate);
-  harness.dispose();
-
-  // A turn with failures surfaces them in per-tool bars and the outcome pill.
-  const failedTurn = renderAndDispose(applied, 'tool-usage-summary', {
-    view: makeView(),
-    turn: 2,
-    language: 'zh',
-  });
-  assertIncludes(failedTurn.text, [
-    '工具调用看板 · 第 2 轮',
-    '进行中',
-    '2.8s',
-    '600ms',
-    '1 失败',
-    'Shell 命令 2 条',
-  ]);
-  assertNoMissingKeys(failedTurn.translate);
-});
-
-test('per-turn card renders nothing without projection, turn, or calls', () => {
-  const applied = applyPlugin();
-  const noProjection = mountComponent(applied, 'tool-usage-summary', {
-    view: undefined,
-    turn: 1,
-  });
-  assert.equal(noProjection.harness.tree, null);
-  noProjection.harness.dispose();
-
-  const noTurn = mountComponent(applied, 'tool-usage-summary', {
-    view: makeView(),
-    turn: 99,
-  });
-  assert.equal(noTurn.harness.tree, null);
-  noTurn.harness.dispose();
-
-  const emptyTurn = makeView();
-  emptyTurn.turns.push({
-    turn: 3, startTime: T0, endTime: T0 + 10, calls: 0, errors: 0, totalMs: 0, outcome: 'completed',
-  });
-  const zeroCalls = mountComponent(applied, 'tool-usage-summary', {
-    view: emptyTurn,
-    turn: 3,
-  });
-  assert.equal(zeroCalls.harness.tree, null);
-  zeroCalls.harness.dispose();
 });
 
 test('dashboard view renders totals, by-tool table, turn timeline, and recent calls', () => {
@@ -1173,12 +1089,4 @@ test('English dictionaries render the same entries', () => {
     'Showing 5 of 5 calls',
   ]);
   assertNoMissingKeys(dashboard.translate);
-
-  const summary = renderAndDispose(applied, 'tool-usage-summary', {
-    view: makeView(),
-    language: 'en',
-    turn: 1,
-  });
-  assertIncludes(summary.text, ['Tool-call dashboard · Turn 1', 'Completed', '750ms']);
-  assertNoMissingKeys(summary.translate);
 });

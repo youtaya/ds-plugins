@@ -19,16 +19,15 @@ plugin named in that section.
     derived data — the one-line explanation summary, the shell command line,
     aggregate numbers, and bounded failure text for failed calls — never the
     recorded raw parameter object.
-  - Three Web UI surfaces served by a plain-JavaScript client bundle
-    (`client.js`, declared through `dsh.client`, no build step): a per-turn
-    dashboard card after each completed turn (`conversation.chat.turnTail`), a
-    session-wide "Calls" / 「调用看板」 conversation view tab
-    (`conversation.view`), and a right-Sidebar "Calls stream" / 「调用流」 tab
-    that auto-opens once when the current Session starts running and shows a
-    scrollable fixed-length newest-first list of shell commands and tool calls
-    (latest 50, running calls pinned with a ticking elapsed time). All surfaces
-    carry Chinese/English copy and theme-token styling; the right tab falls back
-    to Chat data when the Host projection is unavailable.
+  - Two Web UI surfaces served by a plain-JavaScript client bundle
+    (`client.js`, declared through `dsh.client`, no build step): a session-wide
+    "Calls" / 「调用看板」 conversation view tab (`conversation.view`), and a
+    right-Sidebar "Calls stream" / 「调用流」 tab that auto-opens once when the
+    current Session starts running and shows a scrollable fixed-length
+    newest-first list of shell commands and tool calls (latest 50, running calls
+    pinned with a ticking elapsed time) with a labeled purpose line per call.
+    Both surfaces carry Chinese/English copy and theme-token styling; the right
+    tab falls back to Chat data when the Host projection is unavailable.
   - New optional config fields: `uiEnabled` (default `true`), `uiRecentCalls`
     (default `60`, 1–500), `uiRecentTurns` (default `30`, 1–200), and
     `uiCommandChars` (default `240`, 1–1000). Override them by id `tool-usage`

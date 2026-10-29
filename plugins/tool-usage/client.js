@@ -50,18 +50,6 @@ window.__ModuleLoader__.load({
       'view.filter.all': '全部',
       'view.filter.errors': '失败',
       'view.filter.shell': 'Shell',
-      'summary.title': '工具调用看板 · 第 {turn} 轮',
-      'summary.metric.calls': '调用次数',
-      'summary.metric.errors': '失败次数',
-      'summary.metric.total': '总耗时',
-      'summary.metric.avg': '平均耗时',
-      'summary.metric.tools': '工具种类',
-      'summary.tool.failures': '{count} 失败',
-      'summary.shell': 'Shell 命令 {count} 条',
-      'summary.details.show': '查看 {count} 次调用明细',
-      'summary.details.hide': '收起调用明细',
-      'summary.details.omitted': '更早的调用已省略',
-      'summary.footer': '在会话顶部「调用看板」查看整个会话的统计。',
       'outcome.open': '进行中',
       'outcome.completed': '已完成',
       'outcome.aborted': '已中断',
@@ -75,6 +63,15 @@ window.__ModuleLoader__.load({
       'status.aborted': '中断',
       'status.running': '运行中',
       'turn.label': '第 {turn} 轮',
+      'stream.purpose.label': '目的',
+      'stream.purpose.bash': '执行 Shell 命令',
+      'stream.purpose.read': '读取文件',
+      'stream.purpose.write': '写入文件',
+      'stream.purpose.edit': '编辑文件',
+      'stream.purpose.glob': '查找文件',
+      'stream.purpose.grep': '搜索文本',
+      'stream.purpose.web': '访问网络',
+      'stream.purpose.other': '调用工具 {tool}',
       'stream.tabTitle': '调用流',
       'stream.guideTitle': '调用流',
       'stream.guideDescription': '实时查看本次会话的 Shell 命令与工具调用。',
@@ -130,18 +127,6 @@ window.__ModuleLoader__.load({
       'view.filter.all': 'All',
       'view.filter.errors': 'Failed',
       'view.filter.shell': 'Shell',
-      'summary.title': 'Tool-call dashboard · Turn {turn}',
-      'summary.metric.calls': 'Calls',
-      'summary.metric.errors': 'Failures',
-      'summary.metric.total': 'Total time',
-      'summary.metric.avg': 'Avg time',
-      'summary.metric.tools': 'Tools',
-      'summary.tool.failures': '{count} failed',
-      'summary.shell': '{count} shell commands',
-      'summary.details.show': 'Show {count} call details',
-      'summary.details.hide': 'Hide call details',
-      'summary.details.omitted': 'Earlier calls omitted',
-      'summary.footer': 'Open the Calls tab at the top of the session for whole-session stats.',
       'outcome.open': 'Running',
       'outcome.completed': 'Completed',
       'outcome.aborted': 'Aborted',
@@ -155,6 +140,15 @@ window.__ModuleLoader__.load({
       'status.aborted': 'Aborted',
       'status.running': 'Running',
       'turn.label': 'Turn {turn}',
+      'stream.purpose.label': 'Purpose',
+      'stream.purpose.bash': 'Run shell command',
+      'stream.purpose.read': 'Read file',
+      'stream.purpose.write': 'Write file',
+      'stream.purpose.edit': 'Edit file',
+      'stream.purpose.glob': 'Find files',
+      'stream.purpose.grep': 'Search text',
+      'stream.purpose.web': 'Access the web',
+      'stream.purpose.other': 'Call tool {tool}',
       'stream.tabTitle': 'Calls stream',
       'stream.guideTitle': 'Calls stream',
       'stream.guideDescription': "Watch this session's shell commands and tool calls live.",
@@ -263,55 +257,6 @@ window.__ModuleLoader__.load({
         });
       }
       return list;
-    }
-
-    /** Group one turn's settled calls by tool name, sorted by calls desc then name. */
-    function groupTools(calls) {
-      const groups = new Map();
-      asArray(calls).forEach(function (call) {
-        if (call === null || typeof call !== 'object') return;
-        const tool = typeof call.tool === 'string' && call.tool ? call.tool : '?';
-        let group = groups.get(tool);
-        if (group === undefined) {
-          group = { tool: tool, calls: 0, errors: 0, totalMs: 0, maxMs: 0 };
-          groups.set(tool, group);
-        }
-        group.calls += 1;
-        if (call.status === 'error') group.errors += 1;
-        const duration = num(call.durationMs);
-        group.totalMs += duration;
-        if (duration > group.maxMs) group.maxMs = duration;
-      });
-      return Array.from(groups.values()).sort(function (left, right) {
-        if (right.calls !== left.calls) return right.calls - left.calls;
-        return left.tool < right.tool ? -1 : left.tool > right.tool ? 1 : 0;
-      });
-    }
-
-    /** Derive a single turn's aggregates from the session-wide call list. */
-    function deriveTurn(view, turnNo) {
-      const calls = turnNo === undefined
-        ? []
-        : asArray(view && view.calls).filter(function (call) {
-          return call !== null && typeof call === 'object' && call.turn === turnNo;
-        }).slice(0, 60);
-      const tools = groupTools(calls);
-      const names = new Set();
-      let shellCount = 0;
-      let totalMs = 0;
-      calls.forEach(function (call) {
-        if (typeof call.tool === 'string' && call.tool) names.add(call.tool);
-        if (call.command !== null && call.command !== undefined) shellCount += 1;
-        totalMs += num(call.durationMs);
-      });
-      return {
-        calls: calls,
-        tools: tools,
-        toolCount: names.size,
-        shellCount: shellCount,
-        avgMs: calls.length > 0 ? totalMs / calls.length : 0,
-        maxCalls: tools.length > 0 ? tools[0].calls : 1,
-      };
     }
 
     /** Derive the session dashboard model without mutating the projection. */
@@ -444,7 +389,7 @@ window.__ModuleLoader__.load({
         runningRows.push({
           key: call.callId || 'stream-running-' + index,
           tool: tool,
-          summary: typeof call.summary === 'string' && call.summary ? call.summary : tool,
+          summary: typeof call.summary === 'string' ? call.summary : '',
           command: typeof call.command === 'string' && call.command ? call.command : undefined,
           turn: typeof call.turn === 'number' ? call.turn : undefined,
           running: true,
@@ -462,7 +407,7 @@ window.__ModuleLoader__.load({
         settledRows.push({
           key: call.callId || 'stream-settled-' + index,
           tool: tool,
-          summary: typeof call.summary === 'string' && call.summary ? call.summary : tool,
+          summary: typeof call.summary === 'string' ? call.summary : '',
           command: typeof call.command === 'string' && call.command ? call.command : undefined,
           turn: typeof call.turn === 'number' ? call.turn : undefined,
           running: false,
@@ -559,7 +504,7 @@ window.__ModuleLoader__.load({
     // ------------------------------------------------------------------
 
     const CSS = [
-      '.tu-card,.tu-view{box-sizing:border-box;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary);}',
+      '.tu-view{box-sizing:border-box;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary);}',
       '.tu-dot{flex:none;display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-idle-primary);}',
       '.tu-dot--pulse{animation:tu-pulse 1.4s ease-in-out infinite;}',
       '@keyframes tu-pulse{0%,100%{opacity:1;}50%{opacity:.35;}}',
@@ -569,27 +514,7 @@ window.__ModuleLoader__.load({
       '.tu-summary{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
       '.tu-cmd{flex:1 1 100%;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
       '.tu-dur{flex:none;margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;}',
-      '.tu-shell-hint,.tu-omitted{font-size:11px;color:var(--dsw-alias-label-secondary);}',
-      '.tu-card{width:100%;padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:10px;}',
-      '.tu-card-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}',
-      '.tu-card-title{font-weight:600;font-size:13px;}',
-      '.tu-card-duration{margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;}',
-      '.tu-pill{padding:0 8px;border-radius:999px;border:1px solid currentColor;font-size:11px;line-height:18px;white-space:nowrap;}',
-      '.tu-chips{display:flex;flex-wrap:wrap;gap:6px;}',
-      '.tu-chip{display:flex;flex-direction:column;gap:1px;min-width:64px;padding:4px 8px;border-radius:6px;background:var(--dsw-alias-bg-layer-2);}',
-      '.tu-chip-label{font-size:10px;color:var(--dsw-alias-label-secondary);}',
-      '.tu-chip-value{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;}',
-      '.tu-bars{display:flex;flex-direction:column;gap:4px;}',
-      '.tu-bar-row{display:grid;grid-template-columns:minmax(56px,120px) 1fr auto;align-items:center;gap:8px;}',
-      '.tu-bar-label{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
-      '.tu-bar-track{height:6px;border-radius:3px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;}',
-      '.tu-bar-fill{display:block;height:100%;border-radius:3px;background:var(--dsw-alias-brand-primary);}',
-      '.tu-bar-meta{font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;}',
-      '.tu-bar-errors{margin-left:4px;font-size:11px;}',
-      '.tu-toggle{align-self:flex-start;padding:3px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-size:11px;cursor:pointer;}',
-      '.tu-toggle:hover{border-color:var(--dsw-alias-brand-primary);}',
-      '.tu-details{display:flex;flex-direction:column;gap:4px;padding:6px 8px;border-radius:6px;background:var(--dsw-alias-bg-layer-2);}',
-      '.tu-footer{padding-top:6px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-secondary);}',
+            '.tu-pill{padding:0 8px;border-radius:999px;border:1px solid currentColor;font-size:11px;line-height:18px;white-space:nowrap;}',
       '.tu-view{width:100%;height:100%;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;}',
       '.tu-view-head{display:flex;flex-direction:column;gap:2px;}',
       '.tu-view-headline{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}',
@@ -634,9 +559,12 @@ window.__ModuleLoader__.load({
       '.tu-stream-list{flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:4px;scrollbar-width:thin;scrollbar-color:var(--dsw-alias-border-l2) transparent;}',
       '.tu-stream-hint{font-size:11px;color:var(--dsw-alias-label-secondary);padding-bottom:2px;}',
       '.tu-stream-empty{margin:auto;padding:16px;font-size:12px;color:var(--dsw-alias-label-secondary);text-align:center;}',
-      '.tu-stream-row{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;padding:3px 6px;border-radius:6px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);}',
+      '.tu-stream-row{display:flex;flex-direction:column;align-items:stretch;gap:2px;min-width:0;padding:4px 6px;border-radius:6px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);}',
       '.tu-stream-time{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;white-space:nowrap;}',
-      '.tu-stream-summary{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+      '.tu-stream-meta{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;}',
+      '.tu-stream-purpose{display:flex;align-items:baseline;gap:4px;min-width:0;}',
+      '.tu-stream-purpose-label{flex:none;font-size:10px;color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l1);border-radius:4px;padding:0 4px;}',
+      '.tu-stream-purpose-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
       '.tu-stream-dur{flex:none;margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;}',
     ].join('\n');
 
@@ -656,14 +584,6 @@ window.__ModuleLoader__.load({
     /** One tool-name badge. */
     function toolBadge(tool) {
       return h('span', { className: 'tu-badge', title: tool }, tool);
-    }
-
-    /** One metric chip: localized label above the value. */
-    function metricChip(t, labelKey, value) {
-      return h('div', { className: 'tu-chip', key: labelKey },
-        h('span', { className: 'tu-chip-label' }, t(labelKey)),
-        h('span', { className: 'tu-chip-value' }, String(value)),
-      );
     }
 
     /** One metric card in the dashboard grid. */
@@ -694,90 +614,7 @@ window.__ModuleLoader__.load({
     }
 
     // ------------------------------------------------------------------
-    // Entry 1: per-turn dashboard card in the chat flow.
-    // ------------------------------------------------------------------
-
-    /** One per-tool bar row for a turn summary card. */
-    function turnToolBar(t, group, maxCalls) {
-      const width = Math.max(2, Math.round((group.calls / maxCalls) * 100));
-      return h('div', { className: 'tu-bar-row', key: group.tool },
-        h('span', { className: 'tu-bar-label', title: group.tool }, group.tool),
-        h('span', { className: 'tu-bar-track' }, h('span', { className: 'tu-bar-fill', style: { width: width + '%' } })),
-        h('span', { className: 'tu-bar-meta' },
-          h('span', null, String(group.calls)),
-          group.errors > 0
-            ? h('span', {
-              className: 'tu-bar-errors',
-              style: { color: tokenVar('--dsw-alias-state-error-primary') },
-            }, t('summary.tool.failures', { count: group.errors }))
-            : null,
-        ),
-      );
-    }
-
-    /** Dashboard card rendered after a turn closes. */
-    function TurnSummary(props) {
-      const view = props.useProjection('toolUsage', identity);
-      const openState = React.useState(false);
-      const open = openState[0];
-      const setOpen = openState[1];
-      const turnNo = props.turn !== null && props.turn !== undefined && typeof props.turn.turn === 'number'
-        ? props.turn.turn
-        : undefined;
-      const summary = turnNo === undefined
-        ? undefined
-        : asArray(view && view.turns).filter(function (item) {
-          return item !== null && typeof item === 'object' && item.turn === turnNo;
-        })[0];
-      const derived = React.useMemo(function () { return deriveTurn(view, turnNo); }, [view, turnNo]);
-      if (view === undefined || view === null || summary === undefined) return null;
-      const t = props.t;
-      const calls = num(summary.calls);
-      if (calls === 0) return null;
-      const errors = num(summary.errors);
-      const totalMs = num(summary.totalMs);
-      const avgMs = derived.calls.length > 0 ? derived.avgMs : totalMs / calls;
-      const meta = outcomeMeta(summary.outcome);
-      const bars = derived.tools.slice(0, 5);
-      return h('div', { className: 'tu-card' },
-        h('div', { className: 'tu-card-head' },
-          h('span', { className: 'tu-card-title' }, t('summary.title', { turn: turnNo })),
-          h('span', { className: 'tu-pill', style: { color: tokenVar(meta.token) } }, t(meta.key)),
-          h('span', { className: 'tu-card-duration' }, fmtMs(totalMs)),
-        ),
-        h('div', { className: 'tu-chips' },
-          metricChip(t, 'summary.metric.calls', calls),
-          metricChip(t, 'summary.metric.errors', errors),
-          metricChip(t, 'summary.metric.total', fmtMs(totalMs)),
-          metricChip(t, 'summary.metric.avg', fmtMs(avgMs)),
-          metricChip(t, 'summary.metric.tools', derived.toolCount),
-        ),
-        bars.length > 0
-          ? h('div', { className: 'tu-bars' }, bars.map(function (group) {
-            return turnToolBar(t, group, derived.maxCalls);
-          }))
-          : null,
-        h('div', { className: 'tu-shell-hint' }, t('summary.shell', { count: derived.shellCount })),
-        h('button', {
-          type: 'button',
-          className: 'tu-toggle',
-          'aria-expanded': open ? 'true' : 'false',
-          onClick: function () { setOpen(function (value) { return !value; }); },
-        }, open ? t('summary.details.hide') : t('summary.details.show', { count: derived.calls.length })),
-        open
-          ? h('div', { className: 'tu-details' },
-            derived.calls.map(function (call, index) { return callRow(call, index, t); }),
-            calls > derived.calls.length
-              ? h('div', { className: 'tu-omitted' }, t('summary.details.omitted'))
-              : null,
-          )
-          : null,
-        h('div', { className: 'tu-footer' }, t('summary.footer')),
-      );
-    }
-
-    // ------------------------------------------------------------------
-    // Entry 2: session dashboard view tab.
+    // Entry 1: session dashboard view tab.
     // ------------------------------------------------------------------
 
     /** Filter buttons of the recent-call list. */
@@ -925,7 +762,7 @@ window.__ModuleLoader__.load({
     }
 
     // ------------------------------------------------------------------
-    // Entry 3: right-Sidebar live stream tab.
+    // Entry 2: right-Sidebar live stream tab.
     // ------------------------------------------------------------------
 
     /** Session-header control that reveals the stream tab and auto-opens it once per Session mount. */
@@ -971,19 +808,40 @@ window.__ModuleLoader__.load({
       );
     }
 
-    /** One fixed-length stream row: status, time, tool, explanation, command, duration. */
+    /** Localized purpose line for one stream row: Host explanation, else a tool-class fallback. */
+    function purposeFor(t, row) {
+      if (typeof row.summary === 'string' && row.summary.length > 0) return row.summary;
+      const tool = typeof row.tool === 'string' && row.tool ? row.tool : '?';
+      const lower = tool.toLowerCase();
+      if (lower === 'bash' || lower === 'shell' || lower.indexOf('terminal') === 0) return t('stream.purpose.bash');
+      if (lower.indexOf('read') === 0 || lower === 'cat') return t('stream.purpose.read');
+      if (lower.indexOf('write') === 0) return t('stream.purpose.write');
+      if (lower.indexOf('edit') === 0 || lower.indexOf('patch') === 0) return t('stream.purpose.edit');
+      if (lower.indexOf('glob') === 0) return t('stream.purpose.glob');
+      if (lower.indexOf('grep') === 0 || lower.indexOf('search') === 0) return t('stream.purpose.grep');
+      if (lower.indexOf('web') === 0 || lower.indexOf('fetch') === 0) return t('stream.purpose.web');
+      return t('stream.purpose.other', { tool: tool });
+    }
+
+    /** One fixed-length stream row: status/time meta, purpose line, command, duration. */
     function streamRow(row, now, t) {
       const meta = statusMeta(row.status);
       const durationMs = row.running ? now - row.startTime : row.durationMs;
+      const purpose = purposeFor(t, row);
       return h('div', { className: 'tu-stream-row', key: row.key },
-        statusDot(meta, row.running),
-        h('span', { className: 'tu-stream-time' }, fmtTime(row.time)),
-        toolBadge(row.tool),
-        h('span', { className: 'tu-stream-summary', title: row.summary }, row.summary),
-        row.turn !== undefined
-          ? h('span', { className: 'tu-turn-label' }, t('turn.label', { turn: row.turn }))
-          : null,
-        h('span', { className: 'tu-stream-dur' }, fmtMs(durationMs)),
+        h('div', { className: 'tu-stream-meta' },
+          statusDot(meta, row.running),
+          h('span', { className: 'tu-stream-time' }, fmtTime(row.time)),
+          toolBadge(row.tool),
+          row.turn !== undefined
+            ? h('span', { className: 'tu-turn-label' }, t('turn.label', { turn: row.turn }))
+            : null,
+          h('span', { className: 'tu-stream-dur' }, fmtMs(durationMs)),
+        ),
+        h('div', { className: 'tu-stream-purpose' },
+          h('span', { className: 'tu-stream-purpose-label' }, t('stream.purpose.label')),
+          h('span', { className: 'tu-stream-purpose-text', title: purpose }, purpose),
+        ),
         row.command !== undefined
           ? h('code', { className: 'tu-cmd', title: row.command }, row.command)
           : null,
@@ -1065,14 +923,6 @@ window.__ModuleLoader__.load({
         }, 'tool-usage: stylesheet');
         // The view tab label must follow the active locale without re-registration.
         const t = ctx.locale.bind(NS);
-        ctx.slots.inject('conversation.chat.turnTail', function () {
-          return ctx.slots.register({
-            name: 'conversation.chat.turnTail',
-            id: 'tool-usage-summary',
-            order: 5,
-            locale: NS,
-          }, TurnSummary);
-        });
         ctx.slots.inject('conversation.view', function () {
           return ctx.slots.register({
             name: 'conversation.view',

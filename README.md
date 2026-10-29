@@ -12,7 +12,7 @@ Out-of-tree bundle plugins for [DeepSeek Harness](https://github.com/deepseek-ai
 
 | Package | Version | Description | Documentation |
 | --- | --- | --- | --- |
-| [`dsh-plugin-tool-usage`](plugins/tool-usage) | 0.2.0 | Records every agent tool call with redacted parameters and a readable explanation, reports per-tool call counts, errors, and latency, and adds a live Web UI dashboard (per-turn cards, session calls view, and a right-side live tool-call stream). | [English](plugins/tool-usage/README.md) · [中文](plugins/tool-usage/README.zh.md) |
+| [`dsh-plugin-tool-usage`](plugins/tool-usage) | 0.2.0 | Records every agent tool call with redacted parameters and a readable explanation, reports per-tool call counts, errors, and latency, and adds a live Web UI dashboard (session calls view and a right-side live tool-call stream). | [English](plugins/tool-usage/README.md) · [中文](plugins/tool-usage/README.zh.md) |
 
 Each package has its own README with the full behavior, configuration, and privacy documentation; this file covers the repository as a whole.
 

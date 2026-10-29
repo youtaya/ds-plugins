@@ -22,12 +22,11 @@ instruments every tool call made by an agent and provides:
    through a model-callable `tool_usage` tool and a human `/tool-usage` slash
    command, and persisted so numbers survive a restart.
 4. **Live Web UI** — a Host-registered session projection (`toolUsage`) pushes
-   the current turn's running calls to the browser. The Web UI renders a
-   per-turn dashboard card after a turn closes, contributes a session-wide
-   「调用看板 / Calls」 conversation view tab, and adds a right-Sidebar
-   「调用流 / Calls stream」 tab that lists shell commands and tool calls live.
-   The UI is a read-only window onto the same fold; it registers no tool, prompt
-   section, or model input.
+   the current turn's running calls to the browser. The Web UI contributes a
+   session-wide 「调用看板 / Calls」 conversation view tab and a right-Sidebar
+   「调用流 / Calls stream」 tab that lists shell commands and tool calls live,
+   each with a labeled purpose line. The UI is a read-only window onto the same
+   fold; it registers no tool, prompt section, or model input.
 
 Non-goals (v0.2): Prometheus/OTLP export, LLM-generated explanations, sampling,
 retention policies, per-agent dashboards, programmatic view switching between
@@ -56,7 +55,7 @@ plugins/tool-usage/
   src/tool.ts         model-callable `tool_usage` tool (defineTool)
   src/command.ts      optional human `/tool-usage` slash command
   src/projection.ts   `toolUsage` session projection: live, bounded wire view of calls
-  client.js           hand-written Web client half (no build): turn card, dashboard tab, stream tab
+  client.js           hand-written Web client half (no build): dashboard tab, stream tab
   scripts/build.mjs   deterministic clean build (npm typescript, else DSH checkout)
   tsconfig.json
   cordis.patch.yml
@@ -227,27 +226,25 @@ Bounds and privacy:
 returns `{ inject: ['slots', 'locale'], apply(ctx) }` and registers, all inside
 `ctx.effect`:
 
-1. a per-turn dashboard card in `conversation.chat.turnTail` (id
-   `tool-usage-summary`, order 5) after a turn closes: call/error counts, total
-   and average duration, per-tool bars, shell-command count, and a collapsed
-   call-detail list;
-2. a session-wide dashboard in `conversation.view` (id `tool-usage-calls`,
+1. a session-wide dashboard in `conversation.view` (id `tool-usage-calls`,
    order 20, label `调用看板` / `Calls`): totals, per-tool table, turn timeline,
    and a filterable recent-call list;
-3. a right-Sidebar tab type `tool-usage-stream` (implementation id
+2. a right-Sidebar tab type `tool-usage-stream` (implementation id
    `dsh-plugin-tool-usage-stream`, `multiple: false`, `keepMounted: true`) with
    its body in the keyed `sidebar.right.pane.tab`, a conversation-header action
    (id `tool-usage-stream`), and a guide entry. The body is a full-height,
    scrollable, fixed-length (latest 50) newest-first stream of shell commands
    and tool calls, with running calls pinned and a 500 ms elapsed tick. It is
    auto-opened once per page load when the current Session starts running, using
-   a ref guard so a manual close is not undone. The right tab's registration and
-   opener live behind an optional nested `ctx.inject(['sidebarRight',
+   a ref guard so a manual close is not undone. Each row shows a labeled
+   purpose line: the Host explanation summary, or a localized tool-class
+   fallback when the summary is empty. The right tab's registration and opener
+   live behind an optional nested `ctx.inject(['sidebarRight',
    'sidebarRightTabs'], …)`, so a profile without the right Sidebar keeps the
-   other two entries. When the Host projection is unavailable, the tab falls
-   back to standard `useChat` data (running calls and settled `tool-result`
-   nodes) and derives the same rows locally. This fallback also covers
-   `uiEnabled: false`: the other two surfaces render nothing, while the stream
+   conversation dashboard. When the Host projection is unavailable, the tab
+   falls back to standard `useChat` data (running calls and settled
+   `tool-result` nodes) and derives the same rows locally. This fallback also
+   covers `uiEnabled: false`: the dashboard renders nothing, while the stream
    keeps showing what the conversation already renders.
 
 The components read the projection only through standard props
@@ -334,7 +331,7 @@ tolerated, and invalid values warn once instead of failing the load.
 | `commandName` | `"tool-usage"` | Slash-command name without `/`; lowercased, leading `/` stripped, must match `[a-z][a-z0-9_-]*`. |
 | `statsWriteDebounceMs` | `2000` | Debounce for `stats.json` writes; disposal flushes immediately. |
 | `includeParamsInReport` | `true` | Include redacted parameters in the `recent[]` entries of the canonical snapshot returned by the tool/command; the Markdown renderers never show parameters. |
-| `uiEnabled` | `true` | Register the client-facing `toolUsage` session projection. `false` keeps the recorder/tool/command and makes the two projection-backed UI surfaces render nothing; the right-side stream falls back to Chat data. |
+| `uiEnabled` | `true` | Register the client-facing `toolUsage` session projection. `false` keeps the recorder/tool/command and makes the projection-backed session dashboard render nothing; the right-side stream falls back to Chat data. |
 | `uiRecentCalls` | `60` | Recent settled calls carried in the projection wire view (1–500). Whole-session totals are unaffected. |
 | `uiRecentTurns` | `30` | Recent turn rows carried in the projection wire view (1–200). `totals.turns` still counts every observed turn. |
 | `uiCommandChars` | `240` | Character cap on the shell command line carried in the projection wire view (1–1000), ellipsized. |
@@ -593,9 +590,9 @@ parses, and is listed in `files`.
    off, command clipping, JSON-serializable state, and identity-preserving
    unknown events.
 9. `client` (browser module, stub React) — the module-loader registration shape,
-   the three slot entries and ids/orders/locale namespace, and rendered output
-   (live command, per-turn counts, dashboard totals) against synthetic
-   projection frames.
+   the two slot entries and ids/orders/locale namespace, and rendered output
+   (purpose line, shell command, dashboard totals) against synthetic projection
+   frames.
 
 ## 16. End-to-end verification
 
@@ -677,9 +674,8 @@ aggregates. It does not carry raw argument objects or redacted parameter objects
 for a failed call it carries the same bounded failure text the recorder already
 writes to its local log (`maxStringChars`). The browser module has no network
 access and no Host RPC; it reads the projection only. `uiEnabled: false` removes
-the projection entirely, leaving the previous host-only behavior: the live
-strip, per-turn card, and session dashboard render nothing, while the right-side
-stream falls back to Chat data (the calls the conversation already renders) and
+the projection entirely, leaving the previous host-only behavior: the session
+dashboard renders nothing, while the right-side stream falls back to Chat data (the calls the conversation already renders) and
 sends nothing new off the machine.
 
 ## 19. Change process
@@ -763,12 +759,6 @@ interface ToolUsageView {
 
 UI behavior contract:
 
-- **Turn card** (`conversation.chat.turnTail`, id `tool-usage-summary`): rendered
-  after the owning turn closes and only when that turn made calls. It shows the
-  outcome, call/error counts, total and average duration, top-five tool bars, the
-  shell-command count, and a collapsed `查看 N 次调用明细` list. It points the
-  reader at the session dashboard tab; it does not switch views itself (the
-  Client API exposes no cross-plugin view selection).
 - **Dashboard tab** (`conversation.view`, id `tool-usage-calls`, label
   `调用看板` / `Calls`): session-wide metric cards, per-tool table with share
   bars, recent turn timeline, and a recent-call list filterable by
@@ -778,11 +768,13 @@ UI behavior contract:
   page load when the Session starts running, and reopenable from the
   conversation-header 「调用流」 / "Calls" action or the right-Sidebar guide. A
   full-height header plus a scrollable fixed-length list (50 rows, newest first)
-  of status, time, tool, explanation, shell command, duration, and turn; running
-  calls stay pinned with a ticking elapsed time. When the Host projection is
-  missing, the body derives rows from `useChat` (legacy running calls + settled
-  tool-result nodes) instead of failing.
-- All three use the `tool-usage-ui` locale namespace (complete `zh` + `en`) and
+  of status, time, tool, a labeled purpose line, shell command, duration, and
+  turn; running calls stay pinned with a ticking elapsed time. The purpose is
+  the Host explanation summary, or a localized tool-class line when the summary
+  is empty. When the Host projection is missing, the body derives rows from
+  `useChat` (legacy running calls + settled tool-result nodes) instead of
+  failing.
+- Both use the `tool-usage-ui` locale namespace (complete `zh` + `en`) and
   `--dsw-alias-*` theme tokens for color; no other Client package is imported
   at runtime beyond the loader-provided React.
 - Bounded lists mean a very long session shows aggregate totals for the whole

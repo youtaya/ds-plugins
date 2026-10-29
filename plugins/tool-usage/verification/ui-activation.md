@@ -35,8 +35,8 @@ The 0.2.0 change adds two cooperating halves:
   `sessionProjections` injection, so profiles without the registry still load.
 - **Client** — `client.js` (plain JavaScript, no build) is served by the DSH Web
   module loader through the bundle's `dsh.client` declaration and registers three
-  surfaces: the per-turn dashboard card, the session calls view tab, and a
-  right-Sidebar live stream tab (type `tool-usage-stream`) with a
+  surfaces: the session calls view tab and a right-Sidebar live stream tab
+  (type `tool-usage-stream`, with a labeled purpose line per call) with a
   conversation-header action (which also auto-opens the tab once when the
   Session starts running) and a right-Sidebar guide entry. The right-Sidebar
   registrations live behind an optional nested
@@ -52,8 +52,8 @@ $ npm run build
 build: compiling with <workspace>/plugins/tool-usage/node_modules/typescript/bin/tsc
 built 3980 line(s) to lib/
 $ npm test
-ℹ tests 175
-ℹ pass 175
+ℹ tests 173
+ℹ pass 173
 ℹ fail 0
 ℹ skipped 0
 ```
@@ -62,7 +62,7 @@ Per-file results (each run with `node --test tests/<file>.test.mjs`):
 
 | File | Tests | Result |
 | --- | --- | --- |
-| `client.test.mjs` | 18 | PASS — module-loader shape, four registrations/ids/orders/locale namespace plus the right-Sidebar tab type, zh/en key parity, per-turn card content and disclosure, dashboard tables/filters/empty state, `viewRequest` acknowledgement, right-side stream (50-row cap, projection and Chat fallback, ticking), header-action auto-open once, English rendering |
+| `client.test.mjs` | 16 | PASS — module-loader shape, three registrations/ids/orders/locale namespace plus the right-Sidebar tab type, zh/en key parity, dashboard tables/filters/empty state, `viewRequest` acknowledgement, right-side stream (50-row cap, purpose lines, projection and Chat fallback, ticking), header-action auto-open once, English rendering |
 | `config.test.mjs` | 13 | PASS — including `uiEnabled`/`uiRecentCalls`/`uiRecentTurns`/`uiCommandChars` defaults, clamping, and invalid-value warnings |
 | `explain.test.mjs` | 16 | PASS |
 | `log.test.mjs` | 17 | PASS |
@@ -97,7 +97,6 @@ PASS client half is prefetched immediately
 PASS client half declares its activation edges
 PASS served client bundle responds 200
 PASS served bundle carries the module-loader id
-PASS served bundle registers conversation.chat.turnTail
 PASS served bundle registers conversation.view
 PASS served bundle registers sidebar.right.pane.tab
 PASS served bundle registers conversation.session.header.actions
@@ -105,7 +104,7 @@ PASS served bundle declares the right-Sidebar stream tab type
 PASS served bundle recommends the right-Sidebar activation edge
 PASS served bundle requires only React from the module table
 
-ui-boot: 18 passed, 0 failed
+ui-boot: 17 passed, 0 failed
 ```
 
 Observed boot-graph entry (shape; the revision hash changes with every build):
@@ -135,12 +134,12 @@ cache are removed at the end of a passing run.
 $ npm pack --dry-run --cache <workspace>/.tmp/npm-cache --ignore-scripts
 npm notice name: dsh-plugin-tool-usage
 npm notice version: 0.2.0
-npm notice package size: 96.0 kB
-npm notice unpacked size: 325.5 kB
+npm notice package size: 93.8 kB
+npm notice unpacked size: 315.9 kB
 npm notice total files: 35
 ```
 
-The tarball contains `client.js` (57.1 kB), `lib/projection.js`, the projection
+The tarball contains `client.js` (49.5 kB), `lib/projection.js`, the projection
 declarations, `cordis.patch.yml`, `locale/*.json`, and the docs — no `src/`,
 `tests/`, or `verification/` files. Public-release hygiene passed:
 `node scripts/check-public.mjs` → `OK — no machine-specific paths or credentials
@@ -170,10 +169,8 @@ client half. It does not and cannot prove that an already-open page picked it up
   is committed is not visible yet; the right-Sidebar stream covers the execution window.
 - **Bounded detail.** Session totals and per-tool aggregates cover the complete
   log, but the call/turn lists are the recent `uiRecentCalls` / `uiRecentTurns`
-  window (defaults 60 / 30) and the per-tool table is top-20. Per-turn shell
-  counts and per-turn tool bars derive from that window, so a very long session
-  can undercount those per-turn UI figures while the session metrics stay exact.
-  The turn card says so when older calls were omitted.
+  window (defaults 60 / 30) and the per-tool table is top-20. The session dashboard's lists derive from that window, so very long sessions
+  show complete totals but only the most recent calls and turns.
 - **Dashboard access is a tab.** The Client API exposes no cross-plugin
   `selectView`, so the turn card points at the session dashboard tab instead of
   switching to it. This is a deliberate scope decision, not a missing handler.
@@ -194,9 +191,9 @@ client half. It does not and cannot prove that an already-open page picked it up
 
 ## 7. Verdict
 
-- 175/175 unit + integration tests pass, 0 skipped, exit 0, on a clean rebuild of
+- 173/173 unit + integration tests pass, 0 skipped, exit 0, on a clean rebuild of
   `lib/` against the final `src/` (2026-10-29).
-- The reusable `ui-boot.mjs` harness reports 18/18 PASS against a real, freshly
+- The reusable `ui-boot.mjs` harness reports 17/17 PASS against a real, freshly
   booted isolated DSH Web server: the profile composes, the bundle installs, the
   boot graph advertises the client half with the correct edges, and the served
   bundle is the package's client module registering its slots.
