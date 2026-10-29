@@ -4,8 +4,9 @@
  * The Host folds committed `turn/start`, `tool/call`, `tool/result`, and
  * `turn/end` events into a bounded, privacy-bounded view of the current
  * Session's tool activity. The registry pushes whole values to the browser, so
- * the Client never folds the event log itself and the live strip, per-turn
- * dashboard card, and session dashboard all read the same `toolUsage` key.
+ * the Client never folds the event log itself; the per-turn dashboard card,
+ * session dashboard, and right-side live stream all read the same `toolUsage`
+ * key.
  *
  * Design constraints:
  * - The fold is synchronous and pure, and returns the same state reference for

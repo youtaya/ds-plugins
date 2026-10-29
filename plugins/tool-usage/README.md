@@ -2,7 +2,7 @@
 
 [中文](README.zh.md)
 
-Records every tool call an agent makes, gives each call a deterministic human-readable explanation, and reports per-tool and per-session call counts and latency. In the Web UI it adds a live activity strip above the composer, a dashboard card after each turn, and a session-wide calls view tab. Everything stays on the local machine.
+Records every tool call an agent makes, gives each call a deterministic human-readable explanation, and reports per-tool and per-session call counts and latency. In the Web UI it adds a dashboard card after each turn, a session-wide calls view tab, and a right-side live tool-call stream. Everything stays on the local machine.
 
 | Item | Value |
 | --- | --- |
@@ -119,9 +119,8 @@ Semantics:
 
 ## Web UI dashboard
 
-In a Web or Desktop profile the package also ships a browser half (`client.js`, declared through `dsh.client` with `platform: "web"`) that renders four surfaces — three from one Host-registered session projection, plus a right-Sidebar live stream that prefers that projection and falls back to Chat data:
+In a Web or Desktop profile the package also ships a browser half (`client.js`, declared through `dsh.client` with `platform: "web"`) that renders three surfaces — two from one Host-registered session projection, plus a right-Sidebar live stream that prefers that projection and falls back to Chat data:
 
-- **Live activity strip** above the composer (`conversation.input.dock`, id `tool-usage-live`, order 15). While a turn is open it shows the running tool calls, the current shell command, and each call's one-line explanation; when nothing is running it shows the turn's most recent settled calls. It is hidden when no turn is open.
 - **Per-turn dashboard** after each completed turn (`conversation.chat.turnTail`, id `tool-usage-summary`, order 5). One card per completed turn that made tool calls, with an outcome pill, call and error counts, total and average latency, per-tool bars, the shell-command count, and a collapsible list of that turn's calls.
 - **Session dashboard** in the conversation view tabs (`conversation.view`, id `tool-usage-calls`, order 20, label "Calls" / 「调用看板」). Whole-session totals and failure rate, a per-tool table, a turn timeline, and recent calls with All / Failed / Shell filters.
 - **Right-side live stream** (right-Sidebar tab type `tool-usage-stream`, implementation id `dsh-plugin-tool-usage-stream`). A scrollable, fixed-length newest-first list of the Session's tool calls (latest 50) showing status, time, tool, one-line explanation, the monospace shell command, and duration. Running calls stay pinned at the top with a 500 ms ticking elapsed time. It opens automatically the first time the current Session starts running on a page load — once, so closing it does not reopen it — and can be reopened from the conversation-header 「调用流」 / "Calls" button or the right-Sidebar guide. If the Host projection is unavailable (an older Host process or a profile without it), the panel falls back to the Chat data and still streams the same rows.
@@ -134,7 +133,7 @@ Language and explanation behavior:
 
 - UI labels follow the Web UI language; call explanations keep using the plugin's `language` config, because they are generated on the Host when the call is recorded.
 - With `explain: off` there is no summary, so the views fall back to the tool name; with `brief` or `detailed` the one-line summary is shown. Shell command lines are available for `bash` (and its aliases) only.
-- Set `uiEnabled: false` to skip the projection registration; the live strip, per-turn card, and session dashboard then render nothing. The right-side stream still works in its Chat-data fallback mode (it shows the same calls the conversation already renders); recording, statistics, the `tool_usage` tool, and the `/tool-usage` command are unaffected.
+- Set `uiEnabled: false` to skip the projection registration; the per-turn card and session dashboard then render nothing. The right-side stream still works in its Chat-data fallback mode (it shows the same calls the conversation already renders); recording, statistics, the `tool_usage` tool, and the `/tool-usage` command are unaffected.
 
 After upgrading the package, restart the profile and refresh the browser page once so the Web client loads the new client bundle.
 
@@ -216,7 +215,7 @@ A patch **replaces** the targeted row's whole `config`; it does not merge key by
 | `commandName` | `"tool-usage"` | Slash command name without `/`; lowercased automatically, a leading `/` is stripped, and it must match `[a-z][a-z0-9_-]*` (otherwise the default is used). |
 | `statsWriteDebounceMs` | `2000` | Debounce window for `stats.json` writes; disposal flushes immediately. |
 | `includeParamsInReport` | `true` | Whether `recent[]` entries in tool/command snapshot output carry the redacted parameters. The Markdown reports never show parameters. |
-| `uiEnabled` | `true` | Boolean. Register the `toolUsage` session projection and render its three Web UI views. `false` skips the projection, so those three surfaces render nothing; the right-side stream keeps working from its Chat-data fallback. Recording, statistics, and the tool/command are unaffected. |
+| `uiEnabled` | `true` | Boolean. Register the `toolUsage` session projection and render its two Web UI views (per-turn card and session dashboard). `false` skips the projection, so those two surfaces render nothing; the right-side stream keeps working from its Chat-data fallback. Recording, statistics, and the tool/command are unaffected. |
 | `uiRecentCalls` | `60` | Integer, 1–500. Number of most recent settled calls carried by the projection and listed in the dashboard. Older calls fall out of the lists; totals are unaffected. |
 | `uiRecentTurns` | `30` | Integer, 1–200. Number of most recent turns carried by the projection (turn card and dashboard timeline). Older turns fall out of the lists; totals are unaffected. |
 | `uiCommandChars` | `240` | Integer, 1–1000. Maximum characters of one shell command line carried in the projection and shown in the UI; longer commands are truncated with `…`. |

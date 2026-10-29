@@ -716,18 +716,16 @@ test('bundle uses the loader format, requires only react, and exposes inject/app
   assert.equal(typeof client.plugin.apply, 'function');
 });
 
-test('apply registers the three conversation entries, the sidebar body, and the header action', () => {
+test('apply registers the two conversation entries, the sidebar body, and the header action', () => {
   const applied = applyPlugin();
   assert.deepEqual(applied.injections, [
-    'conversation.input.dock',
     'conversation.chat.turnTail',
     'conversation.view',
     'sidebar.right.pane.tab',
     'conversation.session.header.actions',
   ]);
-  assert.equal(applied.registrations.length, 5);
+  assert.equal(applied.registrations.length, 4);
   const expected = [
-    ['conversation.input.dock', 'tool-usage-live', 15],
     ['conversation.chat.turnTail', 'tool-usage-summary', 5],
     ['conversation.view', 'tool-usage-calls', 20],
   ];
@@ -739,18 +737,18 @@ test('apply registers the three conversation entries, the sidebar body, and the 
     assert.equal(entry.options.locale, 'tool-usage-ui');
     assert.equal(typeof entry.component, 'function');
   });
-  const view = applied.registrations[2].options;
+  const view = applied.registrations[1].options;
   assert.equal(typeof view.label, 'function');
   assert.equal(view.label(), '调用看板');
 
   // Keyed right-Sidebar body under the tab definition's id.
-  const body = applied.registrations[3];
+  const body = applied.registrations[2];
   assert.equal(body.options.name, 'sidebar.right.pane.tab');
   assert.equal(body.options.key, 'dsh-plugin-tool-usage-stream');
   assert.equal(body.options.locale, 'tool-usage-ui');
   assert.equal(typeof body.component, 'function');
   // Header action can reopen the tab manually.
-  const headerAction = applied.registrations[4];
+  const headerAction = applied.registrations[3];
   assert.equal(headerAction.options.name, 'conversation.session.header.actions');
   assert.equal(headerAction.options.id, 'tool-usage-stream');
   assert.equal(headerAction.options.order, 30);
@@ -761,11 +759,6 @@ test('apply registers the three conversation entries, the sidebar body, and the 
   applied.openedTabs.length = 0;
   face.openStream();
   assert.deepEqual(applied.openedTabs, [['session-7', 'tool-usage-stream']]);
-
-  // Live strip carries the same opener for auto-open.
-  assert.equal(typeof applied.registrations[0].options.inject, 'function');
-  applied.registrations[0].options.inject('session-8').openStream();
-  assert.deepEqual(applied.openedTabs.at(-1), ['session-8', 'tool-usage-stream']);
 
   // Sidebar tab type definition.
   assert.equal(applied.registeredTypes.length, 1);
@@ -786,16 +779,12 @@ test('apply registers the three conversation entries, the sidebar body, and the 
 
 test('a profile without the right sidebar keeps the conversation entries', () => {
   const applied = applyPlugin({ withSidebar: false });
-  assert.equal(applied.registrations.length, 3);
+  assert.equal(applied.registrations.length, 2);
   assert.deepEqual(applied.injections, [
-    'conversation.input.dock',
     'conversation.chat.turnTail',
     'conversation.view',
   ]);
   assert.equal(applied.registeredTypes.length, 0);
-  // The live strip still exposes an opener; it is a harmless no-op here.
-  const face = applied.registrations[0].options.inject('session-1');
-  assert.doesNotThrow(() => face.openStream());
   assert.equal(applied.openedTabs.length, 0);
 });
 
@@ -809,8 +798,6 @@ test('locale namespace has complete, parallel zh and en dictionaries', () => {
   assert.ok(zhKeys.length >= 72, `expected a complete dictionary, got ${zhKeys.length} keys`);
   assert.equal(applied.dicts.zh['view.label'], '调用看板');
   assert.equal(applied.dicts.en['view.label'], 'Calls');
-  assert.equal(applied.dicts.zh['live.title.running'], '正在执行工具调用');
-  assert.equal(applied.dicts.en['live.title.running'], 'Running tool calls');
   assert.equal(applied.dicts.zh['summary.footer'],
     '在会话顶部「调用看板」查看整个会话的统计。');
   assert.equal(applied.dicts.zh['stream.tabTitle'], '调用流');
@@ -819,79 +806,22 @@ test('locale namespace has complete, parallel zh and en dictionaries', () => {
   assert.equal(applied.dicts.en['stream.fallback.bash'], 'Run shell command: {command}');
 });
 
-test('live strip renders running calls and ticks elapsed time every 500ms', () => {
-  const applied = applyPlugin();
-  const view = makeView();
-  const timerStart = client.timers.length;
-  const { harness, translate } = mountComponent(applied, 'tool-usage-live', { view });
-  const initial = textOf(harness.tree);
-  assertIncludes(initial, [
-    '正在执行工具调用',
-    '第 2 轮',
-    '3 次调用',
-    '1 失败',
-    'pnpm dev', // bash command of the first running call
-    '启动服务', // its one-line explanation
-    '900ms', // elapsed tick value against the fake clock
-    '还有 1 条', // four running calls, three shown
-    'grep', // empty summary falls back to the tool name
-  ]);
-  assertExcludes(initial, ['本轮工具调用']);
-  const interval = client.timers.slice(timerStart).find((timer) => timer.ms === 500);
-  assert.ok(interval !== undefined, 'a running call must start a 500ms interval');
-  // Advance the fake clock and fire the interval callback: the strip re-renders.
-  client.clock.now = T0 + 1000;
-  interval.callback();
-  harness.rerender();
-  assertIncludes(textOf(harness.tree), ['1.9s']);
-  assertNoMissingKeys(translate);
-  harness.dispose();
-  assert.equal(client.timers[interval.id - 1].cleared, true, 'interval must be cleared on unmount');
-});
-
-test('live strip renders nothing without a projection or without an open turn', () => {
-  const applied = applyPlugin();
-  const missing = mountComponent(applied, 'tool-usage-live', { view: undefined });
-  assert.equal(missing.harness.tree, null);
-  missing.harness.dispose();
-
-  const closed = makeView();
-  closed.turns[1].endTime = T0 - 100;
-  closed.turns[1].outcome = 'completed';
-  closed.running = [];
-  const closedMount = mountComponent(applied, 'tool-usage-live', { view: closed });
-  assert.equal(closedMount.harness.tree, null);
-  closedMount.harness.dispose();
-});
-
-test('live strip falls back to the active turn\'s last settled calls when idle', () => {
-  const applied = applyPlugin();
-  const view = makeView();
-  view.running = [];
-  const { text, translate } = renderAndDispose(applied, 'tool-usage-live', { view });
-  assertIncludes(text, ['本轮工具调用', '运行测试', '构建产物', '搜索用法']);
-  assertExcludes(text, ['正在执行工具调用', 'pnpm dev']);
-  assertNoMissingKeys(translate);
-});
-
-test('live strip auto-opens the stream once when the session starts running', () => {
+test('stream header action auto-opens the stream once when the session starts running', () => {
   const applied = applyPlugin();
   let running = false;
   const opened = [];
-  const { harness, translate } = mountComponent(applied, 'tool-usage-live', {
-    view: makeView(),
+  const mounted = mountComponent(applied, 'tool-usage-stream', {
     sessionRunning: () => running,
-    openStream: (sessionId) => { opened.push(sessionId); },
+    openStream: () => { opened.push('opened'); },
   });
   assert.deepEqual(opened, [], 'an idle session must not open the panel');
   running = true;
-  harness.rerender();
-  assert.deepEqual(opened, ['session-1']);
-  // The guard survives renders: closing (or re-rendering) does not reopen.
-  harness.rerender();
-  assert.deepEqual(opened, ['session-1']);
-  assertNoMissingKeys(translate);
-  harness.dispose();
+  mounted.harness.rerender();
+  assert.deepEqual(opened, ['opened']);
+  mounted.harness.rerender();
+  assert.deepEqual(opened, ['opened'], 'the ref guard stops later automatic opens');
+  assertNoMissingKeys(mounted.translate);
+  mounted.harness.dispose();
 });
 
 test('stream header action opens the sidebar stream tab', () => {
@@ -1223,12 +1153,12 @@ test('dashboard consumes a focus viewRequest and acknowledges it', () => {
 
 test('English dictionaries render the same entries', () => {
   const applied = applyPlugin();
-  const live = renderAndDispose(applied, 'tool-usage-live', {
+  const stream = renderAndDispose(applied, 'dsh-plugin-tool-usage-stream', {
     view: makeView(),
     language: 'en',
   });
-  assertIncludes(live.text, ['Running tool calls', 'Turn 2', 'pnpm dev']);
-  assertNoMissingKeys(live.translate);
+  assertIncludes(stream.text, ['Calls stream', 'pnpm dev', 'Turn 2']);
+  assertNoMissingKeys(stream.translate);
 
   const dashboard = renderAndDispose(applied, 'tool-usage-calls', {
     view: makeView(),

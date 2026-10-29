@@ -34,13 +34,14 @@ The 0.2.0 change adds two cooperating halves:
   redacted wire view. `src/index.ts` registers it through a nested optional
   `sessionProjections` injection, so profiles without the registry still load.
 - **Client** — `client.js` (plain JavaScript, no build) is served by the DSH Web
-  module loader through the bundle's `dsh.client` declaration and registers four
-  surfaces: the live strip, the per-turn dashboard card, the session calls view
-  tab, and a right-Sidebar live stream tab (type `tool-usage-stream`) with a
-  conversation-header reopen action and a right-Sidebar guide entry. The
-  right-Sidebar registrations live behind an optional nested
+  module loader through the bundle's `dsh.client` declaration and registers three
+  surfaces: the per-turn dashboard card, the session calls view tab, and a
+  right-Sidebar live stream tab (type `tool-usage-stream`) with a
+  conversation-header action (which also auto-opens the tab once when the
+  Session starts running) and a right-Sidebar guide entry. The right-Sidebar
+  registrations live behind an optional nested
   `ctx.inject(['sidebarRight', 'sidebarRightTabs'], …)`, so a composition without
-  that Sidebar keeps the three conversation entries.
+  that Sidebar keeps the two conversation entries.
 
 ## 2. Unit + integration suite
 
@@ -49,10 +50,10 @@ From `<workspace>/plugins/tool-usage`:
 ```console
 $ npm run build
 build: compiling with <workspace>/plugins/tool-usage/node_modules/typescript/bin/tsc
-built 3978 line(s) to lib/
+built 3980 line(s) to lib/
 $ npm test
-ℹ tests 178
-ℹ pass 178
+ℹ tests 175
+ℹ pass 175
 ℹ fail 0
 ℹ skipped 0
 ```
@@ -61,7 +62,7 @@ Per-file results (each run with `node --test tests/<file>.test.mjs`):
 
 | File | Tests | Result |
 | --- | --- | --- |
-| `client.test.mjs` | 21 | PASS — module-loader shape, five registrations/ids/orders/locale namespace plus the right-Sidebar tab type, zh/en key parity, live ticking, null states, per-turn card content and disclosure, dashboard tables/filters/empty state, `viewRequest` acknowledgement, right-side stream (50-row cap, projection and Chat fallback, auto-open once), English rendering |
+| `client.test.mjs` | 18 | PASS — module-loader shape, four registrations/ids/orders/locale namespace plus the right-Sidebar tab type, zh/en key parity, per-turn card content and disclosure, dashboard tables/filters/empty state, `viewRequest` acknowledgement, right-side stream (50-row cap, projection and Chat fallback, ticking), header-action auto-open once, English rendering |
 | `config.test.mjs` | 13 | PASS — including `uiEnabled`/`uiRecentCalls`/`uiRecentTurns`/`uiCommandChars` defaults, clamping, and invalid-value warnings |
 | `explain.test.mjs` | 16 | PASS |
 | `log.test.mjs` | 17 | PASS |
@@ -96,7 +97,6 @@ PASS client half is prefetched immediately
 PASS client half declares its activation edges
 PASS served client bundle responds 200
 PASS served bundle carries the module-loader id
-PASS served bundle registers conversation.input.dock
 PASS served bundle registers conversation.chat.turnTail
 PASS served bundle registers conversation.view
 PASS served bundle registers sidebar.right.pane.tab
@@ -105,7 +105,7 @@ PASS served bundle declares the right-Sidebar stream tab type
 PASS served bundle recommends the right-Sidebar activation edge
 PASS served bundle requires only React from the module table
 
-ui-boot: 19 passed, 0 failed
+ui-boot: 18 passed, 0 failed
 ```
 
 Observed boot-graph entry (shape; the revision hash changes with every build):
@@ -135,12 +135,12 @@ cache are removed at the end of a passing run.
 $ npm pack --dry-run --cache <workspace>/.tmp/npm-cache --ignore-scripts
 npm notice name: dsh-plugin-tool-usage
 npm notice version: 0.2.0
-npm notice package size: 97.8 kB
-npm notice unpacked size: 333.5 kB
+npm notice package size: 96.0 kB
+npm notice unpacked size: 325.5 kB
 npm notice total files: 35
 ```
 
-The tarball contains `client.js` (62.5 kB), `lib/projection.js`, the projection
+The tarball contains `client.js` (57.1 kB), `lib/projection.js`, the projection
 declarations, `cordis.patch.yml`, `locale/*.json`, and the docs — no `src/`,
 `tests/`, or `verification/` files. Public-release hygiene passed:
 `node scripts/check-public.mjs` → `OK — no machine-specific paths or credentials
@@ -167,7 +167,7 @@ client half. It does not and cannot prove that an already-open page picked it up
   evidence; do not treat them as a screenshot-equivalent check.
 - **Snapshot timing.** The projection updates when a call starts/settles or a turn
   opens/closes. A call still streaming its arguments before its `tool/call` event
-  is committed is not visible yet; the live strip covers the execution window.
+  is committed is not visible yet; the right-Sidebar stream covers the execution window.
 - **Bounded detail.** Session totals and per-tool aggregates cover the complete
   log, but the call/turn lists are the recent `uiRecentCalls` / `uiRecentTurns`
   window (defaults 60 / 30) and the per-tool table is top-20. Per-turn shell
@@ -177,8 +177,9 @@ client half. It does not and cannot prove that an already-open page picked it up
 - **Dashboard access is a tab.** The Client API exposes no cross-plugin
   `selectView`, so the turn card points at the session dashboard tab instead of
   switching to it. This is a deliberate scope decision, not a missing handler.
-- **Right-side stream auto-opens once per page load.** A per-mount ref guard
-  opens the right-Sidebar tab when the current Session first starts running; if
+- **Right-side stream auto-opens once per page load.** A ref guard in the
+  conversation-header action opens the right-Sidebar tab when the current
+  Session first starts running; if
   the user closes it during that page life it stays closed, and it is reopened
   from the header action or the right-Sidebar guide. The body falls back to
   `useChat` data when the Host projection is unavailable, so the stream works
@@ -193,14 +194,14 @@ client half. It does not and cannot prove that an already-open page picked it up
 
 ## 7. Verdict
 
-- 178/178 unit + integration tests pass, 0 skipped, exit 0, on a clean rebuild of
+- 175/175 unit + integration tests pass, 0 skipped, exit 0, on a clean rebuild of
   `lib/` against the final `src/` (2026-10-29).
-- The reusable `ui-boot.mjs` harness reports 19/19 PASS against a real, freshly
+- The reusable `ui-boot.mjs` harness reports 18/18 PASS against a real, freshly
   booted isolated DSH Web server: the profile composes, the bundle installs, the
   boot graph advertises the client half with the correct edges, and the served
-  bundle is the package's client module registering all three slots.
+  bundle is the package's client module registering its slots.
 - `npm pack --dry-run` is release-ready (35 files, 0.2.0, client half and
   projection included, no source/tests/verification).
 - Remaining work for a human: restart the profile, refresh the page, and inspect
-  the three surfaces in light and dark themes. The visual check is the only
+  the dashboard surfaces in light and dark themes. The visual check is the only
   outstanding verification item.

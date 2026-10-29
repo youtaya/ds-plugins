@@ -32,10 +32,10 @@ $ cd <workspace>/plugins/tool-usage
 $ npm ci
 $ npm run build
 build: compiling with <workspace>/plugins/tool-usage/node_modules/typescript/bin/tsc
-built 3978 line(s) to lib/
+built 3980 line(s) to lib/
 $ npm test
-ℹ tests 178
-ℹ pass 178
+ℹ tests 175
+ℹ pass 175
 ℹ fail 0
 ℹ skipped 0
 ℹ duration_ms ~370
@@ -43,7 +43,7 @@ $ npm test
 
 | File | Tests | Scope added in 0.2.0 |
 | --- | --- | --- |
-| `client.test.mjs` | 21 | browser bundle: module-loader shape, five slot registrations + right-Sidebar tab type, locale parity, live ticking, null states, turn card, dashboard filters, right-side stream (projection and Chat fallback, 50-row cap), auto-open once, English |
+| `client.test.mjs` | 18 | browser bundle: module-loader shape, four slot registrations + right-Sidebar tab type, locale parity, turn card, dashboard filters, right-side stream (projection and Chat fallback, 50-row cap, ticking), header-action auto-open once, English |
 | `config.test.mjs` | 13 | `ui*` defaults, clamping, invalid-value warnings |
 | `package.test.mjs` | 11 | `dsh.client`, `./client`, `client.js` in `files`, plain-JS parse/no Harness imports |
 | `plugin.test.mjs` | 18 | projection registration/release, `uiEnabled: false`, missing registry, registration-failure tolerance |
@@ -51,8 +51,8 @@ $ npm test
 | others (`explain`, `log`, `recorder`, `redact`, `stats`, `tool`) | 98 | unchanged contracts, still green |
 
 `npm pack --dry-run --cache <workspace>/.tmp/npm-cache --ignore-scripts` reports
-`dsh-plugin-tool-usage-0.2.0.tgz` with 35 files (97.8 kB packed / 333.5 kB
-unpacked), including `client.js` (62.5 kB), `lib/projection.js`, and the
+`dsh-plugin-tool-usage-0.2.0.tgz` with 35 files (96.0 kB packed / 325.5 kB
+unpacked), including `client.js` (57.1 kB), `lib/projection.js`, and the
 projection declarations, and no `src/`, `tests/`, or `verification/` entries.
 `node scripts/check-public.mjs` passes (105 candidate files).
 
@@ -263,7 +263,7 @@ or hidden by weakening a test.
 
 ## 8. Verdict
 
-- 178/178 unit + integration tests pass for v0.2.0, 0 skipped, exit code 0 — run
+- 175/175 unit + integration tests pass for v0.2.0, 0 skipped, exit code 0 — run
   on 2026-10-29 after the Web UI change (v0.1.0's 133/133 run remains in §0.1–§7).
 - The v0.2.0 browser half additionally passed the isolated real-Web-server boot
   check (15/15 assertions, `verification/ui-activation.md`).

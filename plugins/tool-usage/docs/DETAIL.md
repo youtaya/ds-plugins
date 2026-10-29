@@ -7,7 +7,7 @@
 - **Recording**: wraps `tools/execute` and records the tool name, redacted and truncated arguments, start time, duration, status (`ok` / `error` / `aborted` / `threw`), owning session, and call id — one JSONL line per call.
 - **Explanation**: gives every call a deterministic Chinese or English summary, such as "Run shell command: pnpm test" or "Read file /tmp/a.ts (from line 1, up to 200 lines)", so a log line is understandable without the model's arguments.
 - **Statistics**: per-tool and per-session call counts, errors, total latency, average/min/max/last latency, and slow-call counts. Aggregates live in memory; queries never scan the log.
-- **Web UI dashboard**: in a Web or Desktop profile, a live activity strip above the composer shows the current shell command and running tool calls with their explanations; each completed turn gets a dashboard card; and a session-wide "Calls" / 「调用看板」 view tab shows totals, per-tool bars, a turn timeline, and recent calls. The browser half is a plain-JavaScript bundle declared through `dsh.client`; it reads a Host session projection and adds no build step.
+- **Web UI dashboard**: in a Web or Desktop profile, each completed turn gets a dashboard card, a session-wide "Calls" / 「调用看板」 view tab shows totals, per-tool bars, a turn timeline, and recent calls, and a right-Sidebar "Calls stream" tab lists shell commands and tool calls live. The browser half is a plain-JavaScript bundle declared through `dsh.client`; it reads a Host session projection and adds no build step.
 - **Two entry points**: the read-only model tool `tool_usage` (`summary` / `tools` / `recent` / `explain` views) and the human `/tool-usage` slash command.
 - **Persistence**: call records are written per day to `calls-YYYY-MM-DD.jsonl`, aggregate snapshots to `stats.json` and restored on restart.
 
@@ -115,32 +115,30 @@ The command is registered only in profiles that provide the `commands` service (
 
 ## Web UI dashboard
 
-The package ships a browser half for Web / Desktop profiles: `client.js` is a hand-written plain-JavaScript module (no JSX, no TypeScript, no build step), declared in `package.json` as `dsh.client: { platform: "web", immediately: true, inject: [...] }` and served by the DSH Web client module system. It registers four entries on top of the host-side recording and statistics.
+The package ships a browser half for Web / Desktop profiles: `client.js` is a hand-written plain-JavaScript module (no JSX, no TypeScript, no build step), declared in `package.json` as `dsh.client: { platform: "web", immediately: true, inject: [...] }` and served by the DSH Web client module system. It registers three entries on top of the host-side recording and statistics.
 
 | Entry | Slot | Id | Order | Renders |
 | --- | --- | --- | --- | --- |
-| Live activity strip | `conversation.input.dock` | `tool-usage-live` | 15 | Full-width card above the composer: running tool calls, current shell command, per-call explanation, elapsed time. |
 | Per-turn dashboard | `conversation.chat.turnTail` | `tool-usage-summary` | 5 | A card after each completed turn: outcome, counts, latency, per-tool bars, collapsible call list. |
 | Session dashboard | `conversation.view` | `tool-usage-calls` | 20 | A conversation view tab labelled 「调用看板」/ "Calls": whole-session totals, per-tool table, turn timeline, recent calls. |
 | Right-side live stream | `sidebar.right.pane.tab` (tab type `tool-usage-stream`) | `dsh-plugin-tool-usage-stream` | — | A right-Sidebar tab streaming a fixed-length newest-first list (latest 50) of shell commands and tool calls, with running calls pinned on top. |
 
 ### Where it renders
 
-- **Live activity strip.** The only surface that updates while a turn is open. A pulsing status dot (its animation is disabled under `prefers-reduced-motion`), a title (`正在执行工具调用` while calls run, otherwise `本轮工具调用`), and a right-aligned meta line such as `第 3 轮 · 12 次调用 · 1 失败 · 00:01:23`; then up to three running calls, each with a tool badge, the one-line explanation summary, a monospace single-line shell command when present, and a client-side elapsed time that ticks every 500 ms. When nothing is running it shows up to three of the turn's most recent settled calls; surplus rows collapse into a muted `还有 N 条` / `N more` hint. It renders nothing when no turn is open, and the header region carries `role="status"` and `aria-live="polite"`.
 - **Per-turn dashboard.** Appended to the chat flow after a turn completes and only when that turn made calls: the turn title, an outcome pill, the turn's total duration, metric chips (call count, failure count, total / average latency, distinct tools), horizontal per-tool bars for the top five tools of that turn with call and failure counts, the shell-command count, and a collapsed-by-default list of the turn's settled calls (`status`, tool, summary, command, duration). When the bounded window trimmed older calls of that turn, the card says `更早的调用已省略`; a footer points to the session dashboard tab for whole-session numbers.
 - **Right-side live stream.** A right-Sidebar tab opened automatically the first time the current Session starts running on a page load (a ref guard means closing it does not reopen it), and reopenable from the conversation-header 「调用流」 / "Calls" action or the right-Sidebar guide. Its body is a full-height column: a header with the live/idle state, `共 N 次调用`, and the current turn; then a scrollable fixed-length list capped at 50 rows, newest first, that shows a status dot, `HH:MM:SS`, tool badge, one-line explanation, the monospace shell command, duration, and turn. Running calls stay pinned at the top with a 500 ms ticking elapsed time. When the Host projection is unavailable (an older Host process or a profile without the unit), the tab falls back to the Chat data and derives the same rows from `useChat`'s running list and settled tool-result nodes, so the stream still updates live.
 - **Session dashboard.** A scrollable conversation page with a header (title, subtitle, and the projection's `generatedAt` time), a responsive grid of metric cards (calls, failures and failure rate, total latency, average latency, slowest call, distinct tools, shell-command count, turns), a per-tool table (tool / calls / failures / average / slowest / share bar, sorted by calls descending, at most 20 tools), a turn timeline (newest first: turn, outcome, calls, failures, latency, start time; the open turn is highlighted), and a recent-calls list with `All` / `Failed` / `Shell` filters. With no projection or no calls yet, the tab shows an empty state instead of a table.
 
 ### What data it reads
 
-The Host registers one session projection with key `toolUsage` and delivers it as whole-value JSON frames (view `v: 1`): `generatedAt`, `language`, `totals`, `byTool`, `turns`, `calls`, and `running`. The unit sets `wire.summary: false`, so the value is not carried in session-list summaries; the client reads it on demand through the framework's `useProjection` prop and receives a new object whenever a tool call starts or settles or a turn opens or closes. An older host without the unit (or a host with `uiEnabled: false`) yields `undefined`: the three projection-backed entries then render nothing and the view tab shows its empty state instead of failing, while the right-side stream falls back to the Chat data described below.
+The Host registers one session projection with key `toolUsage` and delivers it as whole-value JSON frames (view `v: 1`): `generatedAt`, `language`, `totals`, `byTool`, `turns`, `calls`, and `running`. The unit sets `wire.summary: false`, so the value is not carried in session-list summaries; the client reads it on demand through the framework's `useProjection` prop and receives a new object whenever a tool call starts or settles or a turn opens or closes. An older host without the unit (or a host with `uiEnabled: false`) yields `undefined`: the two projection-backed entries then render nothing and the view tab shows its empty state instead of failing, while the right-side stream falls back to the Chat data described below.
 
 The lists are fixed, bounded shapes:
 
 - `calls` contains settled calls only, ascending by end time, at most `uiRecentCalls` (default 60). Running calls are not in this list.
 - `turns` contains the most recent turns, ascending, at most `uiRecentTurns` (default 30); `totals.turns` counts every observed turn and may exceed the listed rows.
 - `byTool` is sorted by call count descending and capped at 20 tool rows.
-- `running` lists currently running calls in start order and carries no duration; the strip computes elapsed time from `startTime` on the client.
+- `running` lists currently running calls in start order and carries no duration; the right-side stream computes elapsed time from `startTime` on the client.
 
 The right-Sidebar tab reads the same projection when present; its fallback mode reads only the standard `useChat` data the framework already exposes to session-scoped entries. The browser half never calls a Remote endpoint, never fetches, never reads another plugin's DOM, and only writes DOM through its own effect-owned elements and style sheet. No additional storage is introduced: the view lives in the Web page's memory for the displayed session.
 
@@ -161,7 +159,7 @@ The right-Sidebar tab reads the same projection when present; its fallback mode 
 - With `explain: off` the summary is empty and every view falls back to the tool name, while the call is still counted and listed. The `details` lines are record-only and never sent to the browser.
 - Shell command lines exist for `bash` and its aliases and are truncated to `uiCommandChars` characters (default 240) with `…`; other tools have no command line.
 - Sizes and times are formatted in the browser: durations under 1000 ms as `123ms`, otherwise as `1.2s`; timestamps as local `HH:MM:SS`.
-- `uiEnabled: false` skips the projection registration; the live strip, per-turn card, and session dashboard then render nothing. The right-side stream keeps working from its Chat-data fallback (the same calls the conversation already renders). Recording, statistics, the model tool, and the slash command are unaffected.
+- `uiEnabled: false` skips the projection registration; the per-turn card and session dashboard then render nothing. The right-side stream keeps working from its Chat-data fallback (the same calls the conversation already renders). Recording, statistics, the model tool, and the slash command are unaffected.
 
 ### Privacy
 
@@ -172,7 +170,7 @@ The projection is folded on the Host from committed session events and is served
 - The dashboard is **session-scoped and forward-looking**: it renders the current session's in-memory calls from the point the plugin loaded, does not replay the JSONL history, and starts empty after a plugin restart.
 - The lists are bounded by `uiRecentCalls` / `uiRecentTurns` and the tool table by 20 rows; totals cover the whole session, but individual older calls are not listed.
 - The turn card cannot switch the conversation view programmatically (the client API exposes no cross-plugin view switch); it points the user to the Calls tab instead.
-- The live strip's elapsed times tick client-side, so they are approximate; the strip only shows up to three running or settled calls at a time.
+- The right-side stream's elapsed times tick client-side, so they are approximate; its list is capped at 50 rows, newest first.
 - Headless profiles have no UI, and a Web page keeps a previously loaded client bundle until it is refreshed, so an upgrade needs a restart plus a page refresh.
 - The UI follows the harness theme and browser language; it does not add its own theme, font, or icon package.
 
@@ -208,7 +206,7 @@ Override by id `tool-usage` in the profile's `cordis.patch.yml` (a patch replace
 | `commandName` | `"tool-usage"` | Slash command name |
 | `statsWriteDebounceMs` | `2000` | Debounce window for `stats.json` writes |
 | `includeParamsInReport` | `true` | Whether `recent[]` entries in snapshot output carry redacted parameters (the Markdown reports never show parameters) |
-| `uiEnabled` | `true` | Register the `toolUsage` session projection and render its three Web UI entries; `false` leaves recording and statistics untouched (the right-side stream falls back to Chat data) |
+| `uiEnabled` | `true` | Register the `toolUsage` session projection and render its two Web UI entries; `false` leaves recording and statistics untouched (the right-side stream falls back to Chat data) |
 | `uiRecentCalls` | `60` | Integer 1–500; number of most recent settled calls in the projection and the dashboard lists |
 | `uiRecentTurns` | `30` | Integer 1–200; number of most recent turns in the projection and the dashboard timeline |
 | `uiCommandChars` | `240` | Integer 1–1000; character cap for one shell command line carried to the UI (truncated with `…`) |

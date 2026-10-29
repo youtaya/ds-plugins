@@ -12,7 +12,7 @@
 
 | 包 | 版本 | 说明 | 文档 |
 | --- | --- | --- | --- |
-| [`dsh-plugin-tool-usage`](plugins/tool-usage) | 0.2.0 | 记录每次 agent 工具调用（参数脱敏）并生成可读解释，按工具统计调用次数、失败数与耗时，并在 Web UI 中提供实时看板（活动条、每轮卡片、会话调用看板，以及右侧实时工具调用流）。 | [English](plugins/tool-usage/README.md) · [中文](plugins/tool-usage/README.zh.md) |
+| [`dsh-plugin-tool-usage`](plugins/tool-usage) | 0.2.0 | 记录每次 agent 工具调用（参数脱敏）并生成可读解释，按工具统计调用次数、失败数与耗时，并在 Web UI 中提供实时看板（每轮卡片、会话调用看板，以及右侧实时工具调用流）。 | [English](plugins/tool-usage/README.md) · [中文](plugins/tool-usage/README.zh.md) |
 
 每个包有自己的 README，完整说明行为、配置与隐私；本文件只介绍整个仓库。
 

@@ -7,7 +7,7 @@
 - **记录**：包装 `tools/execute`，记录工具名、脱敏并截断后的参数、开始时间、耗时、结果状态（`ok` / `error` / `aborted` / `threw`）、所属会话与调用 id；每次调用一条 JSONL。
 - **解释**：为每次调用生成确定性的中英文摘要，例如“执行 Shell 命令：pnpm test”“读取文件 /tmp/a.ts（第 1 行起，最多 200 行）”；不给模型看参数也能知道这行记录在做什么。
 - **统计**：按工具、按会话统计调用次数、失败数、总耗时、平均/最小/最大/最近耗时、慢调用数；内存中聚合，查询不扫描日志。
-- **Web UI 看板**：在 Web / Desktop profile 中，输入框上方的实时活动条显示当前 Shell 命令与正在执行的工具调用及其解释；每轮结束后追加一张看板卡片；会话视图页签「调用看板」/ Calls 汇总整个会话的总计、按工具条形图、轮次时间线与最近调用。浏览器半侧是通过 `dsh.client` 声明的纯 JavaScript bundle，读取宿主会话投影，无需构建步骤。
+- **Web UI 看板**：在 Web / Desktop profile 中，每轮结束后追加一张看板卡片；会话视图页签「调用看板」/ Calls 汇总整个会话的总计、按工具条形图、轮次时间线与最近调用；右侧栏「调用流」/ Calls stream 实时列出 Shell 命令与工具调用。浏览器半侧是通过 `dsh.client` 声明的纯 JavaScript bundle，读取宿主会话投影，无需构建步骤。
 - **两个入口**：模型可调用的只读工具 `tool_usage`（`summary` / `tools` / `recent` / `explain` 四种视图），以及人类使用的 `/tool-usage` 斜杠命令。
 - **持久化**：调用记录按天写入 `calls-YYYY-MM-DD.jsonl`，聚合快照写入 `stats.json` 并在重启后恢复。
 
@@ -115,32 +115,30 @@ dsh plugin --profile <profile> remove dsh-plugin-tool-usage
 
 ## Web UI 看板
 
-包为 Web / Desktop profile 提供浏览器半侧：`client.js` 是手写的纯 JavaScript 模块（无 JSX、无 TypeScript、无构建步骤），在 `package.json` 中声明为 `dsh.client: { platform: "web", immediately: true, inject: [...] }`，由 DSH Web 客户端模块系统提供。它在宿主侧记录与统计之外注册四个条目。
+包为 Web / Desktop profile 提供浏览器半侧：`client.js` 是手写的纯 JavaScript 模块（无 JSX、无 TypeScript、无构建步骤），在 `package.json` 中声明为 `dsh.client: { platform: "web", immediately: true, inject: [...] }`，由 DSH Web 客户端模块系统提供。它在宿主侧记录与统计之外注册三个条目。
 
 | 条目 | 槽位 | id | order | 渲染内容 |
 | --- | --- | --- | --- | --- |
-| 实时活动条 | `conversation.input.dock` | `tool-usage-live` | 15 | 输入框上方的全宽卡片：正在执行的工具调用、当前 Shell 命令、每次调用的解释、已用时间。 |
 | 每轮看板 | `conversation.chat.turnTail` | `tool-usage-summary` | 5 | 每个执行了工具调用的已完成轮次一张卡片：结果状态、次数、耗时、按工具条形图、可展开的调用列表。 |
 | 会话看板 | `conversation.view` | `tool-usage-calls` | 20 | 标签为「调用看板」/ Calls 的会话视图页：整个会话的总计、按工具表格、轮次时间线、最近调用。 |
 | 右侧实时调用流 | `sidebar.right.pane.tab`（页签类型 `tool-usage-stream`） | `dsh-plugin-tool-usage-stream` | — | 右侧栏页签：固定长度（最新 50 条、倒序）的工具调用与 Shell 命令流，执行中的调用固定在顶部。 |
 
 ### 渲染位置
 
-- **实时活动条。** 唯一在轮次进行中持续更新的界面。它包含：脉动状态点（在 `prefers-reduced-motion` 下停用动画）、标题（执行中为「正在执行工具调用」，否则为「本轮工具调用」），以及右对齐的元信息行，例如 `第 3 轮 · 12 次调用 · 1 失败 · 00:01:23`；随后是最多三条正在执行的调用，每条带工具徽标、一行解释摘要、存在时显示为等宽单行的 Shell 命令，以及客户端每 500 ms 刷新的已用时间。没有调用在跑时，显示本轮最近完成的最多三条调用；多出的行折叠为灰色的「还有 N 条」提示。没有打开的轮次时不渲染，标题区域带 `role="status"` 与 `aria-live="polite"`。
 - **每轮看板。** 一轮完成且该轮确实产生过工具调用后，追加到对话流：轮次标题、结果状态标签、本轮总耗时、指标块（调用次数、失败次数、总耗时/平均耗时、工具种类）、该轮调用最多的前五个工具的横向条形图（含次数与失败数）、Shell 命令数，以及默认折叠的该轮已结束调用列表（状态、工具、摘要、命令、耗时）。当有界窗口挤掉了该轮的更早调用时，卡片会提示 `更早的调用已省略`；底部提示指向会话看板页签，查看整个会话的数字。
 - **右侧实时调用流。** 每次页面加载后，当前会话第一次进入运行状态时自动打开的右侧栏页签（通过 ref 守卫，用户关闭后不会再次自动打开），也可从会话头部的「调用流」/ Calls 按钮或右侧栏引导页重新打开。主体是占满高度的两段布局：页头显示实时/空闲状态、`共 N 次调用` 与当前轮次；下方是可滚动的固定长度列表（最多 50 条、倒序），逐条显示状态点、`HH:MM:SS`、工具徽标、一行解释、等宽 Shell 命令、耗时与轮次。执行中的调用固定在顶部，已用时间每 500 ms 刷新。宿主投影不可用时（旧 Host 进程或未注册该单元的 profile），该页签回退到 Chat 数据，从 `useChat` 的执行中列表与已结束的 tool-result 节点推导同样的行，仍然实时更新。
 - **会话看板。** 可滚动的会话页面：页头（标题、副标题与投影的 `generatedAt` 时间）、响应式指标卡网格（调用次数、失败次数与失败率、总耗时、平均耗时、最慢耗时、工具种类、Shell 命令数、轮次数）、按工具表格（工具 / 次数 / 失败 / 平均 / 最慢 / 占比条，按调用次数降序，最多 20 个工具）、轮次时间线（新到旧：轮次、状态、调用、失败、耗时、开始时间；进行中的轮次高亮），以及支持「全部 / 失败 / Shell」筛选的最近调用列表。没有投影或还没有调用时，页签显示空状态而不是空白表格。
 
 ### 读取的数据
 
-宿主注册一个键为 `toolUsage` 的会话投影，并以整值 JSON 帧下发（视图 `v: 1`）：`generatedAt`、`language`、`totals`、`byTool`、`turns`、`calls`、`running`。该单元声明 `wire.summary: false`，因此该值不进入会话列表摘要；客户端通过框架的 `useProjection` 属性按需读取，并在每次工具调用开始/结束或轮次开始/结束时收到新对象。更旧的宿主没有该单元（或宿主设置了 `uiEnabled: false`）时读到 `undefined`：三个依赖投影的条目都不渲染，会话页签显示空状态而不是报错；右侧调用流则回退到后文所述的 Chat 数据。
+宿主注册一个键为 `toolUsage` 的会话投影，并以整值 JSON 帧下发（视图 `v: 1`）：`generatedAt`、`language`、`totals`、`byTool`、`turns`、`calls`、`running`。该单元声明 `wire.summary: false`，因此该值不进入会话列表摘要；客户端通过框架的 `useProjection` 属性按需读取，并在每次工具调用开始/结束或轮次开始/结束时收到新对象。更旧的宿主没有该单元（或宿主设置了 `uiEnabled: false`）时读到 `undefined`：两个依赖投影的条目都不渲染，会话页签显示空状态而不是报错；右侧调用流则回退到后文所述的 Chat 数据。
 
 列表是固定、有界的形状：
 
 - `calls` 只含已结束的调用，按结束时间升序，最多 `uiRecentCalls` 条（默认 60）；正在执行的调用不在此列表。
 - `turns` 含最近的轮次，升序，最多 `uiRecentTurns` 轮（默认 30）；`totals.turns` 统计所有观察到的轮次，可能多于列出的行数。
 - `byTool` 按调用次数降序排列，最多 20 个工具行。
-- `running` 按开始顺序列出正在执行的调用，本身不带耗时；活动条在客户端根据 `startTime` 计算已用时间。
+- `running` 按开始顺序列出正在执行的调用，本身不带耗时；右侧调用流在客户端根据 `startTime` 计算已用时间。
 
 右侧栏页签优先读取同一个投影；回退模式只读取框架已向 session 作用域条目提供的标准 `useChat` 数据。浏览器半侧不调用 Remote 端点、不发起 fetch、不读取其他插件的 DOM，只通过自己的 effect 持有的元素与样式表写入 DOM。它不引入额外存储：视图只存在于 Web 页面针对当前会话的内存中。
 
@@ -161,7 +159,7 @@ dsh plugin --profile <profile> remove dsh-plugin-tool-usage
 - `explain: off` 时摘要为空，各视图退化为显示工具名，但调用仍会被计数和列出；`details` 明细只写入记录，不会发送到浏览器。
 - Shell 命令行只存在于 `bash` 及其别名的调用，并按 `uiCommandChars` 字符（默认 240）截断加 `…`；其他工具没有命令行。
 - 体积与时间在浏览器内格式化：小于 1000 ms 的耗时显示为 `123ms`，否则为 `1.2s`；时间戳显示为本地 `HH:MM:SS`。
-- `uiEnabled: false` 会跳过投影注册，实时活动条、每轮看板与会话看板随之不渲染；右侧调用流仍以 Chat 数据回退模式工作（展示的就是对话界面已经渲染的同一批调用）。记录、统计、模型工具与斜杠命令不受影响。
+- `uiEnabled: false` 会跳过投影注册，每轮看板与会话看板随之不渲染；右侧调用流仍以 Chat 数据回退模式工作（展示的就是对话界面已经渲染的同一批调用）。记录、统计、模型工具与斜杠命令不受影响。
 
 ### 隐私
 
@@ -172,7 +170,7 @@ dsh plugin --profile <profile> remove dsh-plugin-tool-usage
 - 看板是**会话内、向前看**的：只渲染本会话从插件加载起的在内存调用，不回放 JSONL 历史，插件重启后从空开始。
 - 列表受 `uiRecentCalls` / `uiRecentTurns` 限制，按工具表格最多 20 行；总计覆盖整个会话，但更早的个别调用不会被列出。
 - 每轮卡片无法以程序方式切换会话视图（客户端 API 不提供跨插件视图切换），只能提示用户前往「调用看板」页签。
-- 活动条的已用时间在客户端计时，因此是近似值；活动条最多同时展示三条执行中或最近完成的调用。
+- 右侧调用流的已用时间在客户端计时，因此是近似值；列表固定为最多 50 条、倒序。
 - headless profile 没有 UI；Web 页面在刷新前会保留之前加载的客户端 bundle，因此升级需要重启加刷新页面。
 - UI 跟随宿主主题与浏览器语言，不引入自己的主题、字体或图标包。
 
@@ -208,7 +206,7 @@ dsh plugin --profile <profile> remove dsh-plugin-tool-usage
 | `commandName` | `"tool-usage"` | 斜杠命令名 |
 | `statsWriteDebounceMs` | `2000` | `stats.json` 写盘防抖 |
 | `includeParamsInReport` | `true` | 快照输出中的 `recent[]` 是否附带脱敏参数（Markdown 报告本身不展示参数） |
-| `uiEnabled` | `true` | 是否注册 `toolUsage` 会话投影并渲染它的三个 Web UI 条目；`false` 不影响记录与统计（右侧调用流回退到 Chat 数据） |
+| `uiEnabled` | `true` | 是否注册 `toolUsage` 会话投影并渲染它的两个 Web UI 条目；`false` 不影响记录与统计（右侧调用流回退到 Chat 数据） |
 | `uiRecentCalls` | `60` | 整数 1–500；投影与看板列表中最多的最近已结束调用条数 |
 | `uiRecentTurns` | `30` | 整数 1–200；投影与看板时间线中最多的最近轮次数 |
 | `uiCommandChars` | `240` | 整数 1–1000；单条 Shell 命令行进入 UI 的字符上限（超出截断并加 `…`） |

@@ -50,11 +50,6 @@ window.__ModuleLoader__.load({
       'view.filter.all': '全部',
       'view.filter.errors': '失败',
       'view.filter.shell': 'Shell',
-      'live.title.running': '正在执行工具调用',
-      'live.title.idle': '本轮工具调用',
-      'live.meta': '第 {turn} 轮 · {calls} 次调用 · {errors} 失败 · {time}',
-      'live.waiting': '等待工具调用…',
-      'live.more': '还有 {count} 条',
       'summary.title': '工具调用看板 · 第 {turn} 轮',
       'summary.metric.calls': '调用次数',
       'summary.metric.errors': '失败次数',
@@ -135,11 +130,6 @@ window.__ModuleLoader__.load({
       'view.filter.all': 'All',
       'view.filter.errors': 'Failed',
       'view.filter.shell': 'Shell',
-      'live.title.running': 'Running tool calls',
-      'live.title.idle': 'Tool calls this turn',
-      'live.meta': 'Turn {turn} · {calls} calls · {errors} failed · {time}',
-      'live.waiting': 'Waiting for tool calls…',
-      'live.more': '{count} more',
       'summary.title': 'Tool-call dashboard · Turn {turn}',
       'summary.metric.calls': 'Calls',
       'summary.metric.errors': 'Failures',
@@ -257,16 +247,6 @@ window.__ModuleLoader__.load({
     /** Resolve a turn outcome to its presentation. */
     function outcomeMeta(outcome) {
       return OUTCOME_META[outcome] || { key: 'outcome.open', token: '--dsw-alias-label-secondary' };
-    }
-
-    /** The last turn that has no closing event yet, or undefined. */
-    function activeTurn(view) {
-      const turns = asArray(view && view.turns);
-      for (let index = turns.length - 1; index >= 0; index -= 1) {
-        const turn = turns[index];
-        if (turn !== null && typeof turn === 'object' && turn.endTime === null) return turn;
-      }
-      return undefined;
     }
 
     /** Filter a call list to one settled status (`all` passes everything valid). */
@@ -579,22 +559,17 @@ window.__ModuleLoader__.load({
     // ------------------------------------------------------------------
 
     const CSS = [
-      '.tu-live,.tu-card,.tu-view{box-sizing:border-box;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary);}',
-      '.tu-live{width:100%;padding:8px 10px;display:flex;flex-direction:column;gap:6px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;}',
-      '.tu-live-head{display:flex;align-items:center;gap:6px;min-width:0;}',
-      '.tu-live-title{font-weight:600;font-size:12px;white-space:nowrap;}',
-      '.tu-live-meta{margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;}',
+      '.tu-card,.tu-view{box-sizing:border-box;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary);}',
       '.tu-dot{flex:none;display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-idle-primary);}',
       '.tu-dot--pulse{animation:tu-pulse 1.4s ease-in-out infinite;}',
       '@keyframes tu-pulse{0%,100%{opacity:1;}50%{opacity:.35;}}',
       '@media (prefers-reduced-motion:reduce){.tu-dot--pulse{animation:none;}}',
-      '.tu-live-rows{display:flex;flex-direction:column;gap:4px;}',
       '.tu-row{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;}',
       '.tu-badge{flex:none;max-width:45%;padding:0 6px;border-radius:4px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
       '.tu-summary{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
       '.tu-cmd{flex:1 1 100%;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
       '.tu-dur{flex:none;margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;}',
-      '.tu-more,.tu-live-empty,.tu-shell-hint,.tu-omitted{font-size:11px;color:var(--dsw-alias-label-secondary);}',
+      '.tu-shell-hint,.tu-omitted{font-size:11px;color:var(--dsw-alias-label-secondary);}',
       '.tu-card{width:100%;padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:10px;}',
       '.tu-card-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}',
       '.tu-card-title{font-weight:600;font-size:13px;}',
@@ -719,98 +694,7 @@ window.__ModuleLoader__.load({
     }
 
     // ------------------------------------------------------------------
-    // Entry 1: live activity strip above the composer.
-    // ------------------------------------------------------------------
-
-    /** Compact live strip showing running calls (or the active turn's last settles). */
-    function LiveStrip(props) {
-      const view = props.useProjection('toolUsage', identity);
-      const nowState = React.useState(function () { return Date.now(); });
-      const now = nowState[0];
-      const setNow = nowState[1];
-      const turn = activeTurn(view);
-      const turnNo = turn === undefined ? undefined : turn.turn;
-      const running = asArray(view && view.running).filter(function (call) {
-        return call !== null && typeof call === 'object' && call.turn === turnNo;
-      });
-      const settled = asArray(view && view.calls).filter(function (call) {
-        return call !== null && typeof call === 'object' && call.turn === turnNo;
-      });
-      const ticking = running.length > 0;
-      // Auto-open the stream tab once per mounted session when that session starts
-      // running. The ref survives re-renders, so closing the panel does not reopen it.
-      const sessionRunning = typeof props.useSessionStatus === 'function'
-        ? props.useSessionStatus(function (state) {
-          try {
-            if (state === null || state === undefined || typeof state.get !== 'function') return false;
-            const status = state.get(props.sessionId);
-            return status !== null && status !== undefined && status.running === true;
-          } catch (error) {
-            return false;
-          }
-        })
-        : false;
-      const autoOpened = React.useRef(false);
-      React.useEffect(function () {
-        if (sessionRunning !== true || autoOpened.current) return undefined;
-        autoOpened.current = true;
-        if (typeof props.openStream === 'function') {
-          try {
-            props.openStream(props.sessionId);
-          } catch (error) {
-            /* a profile without the right Sidebar simply keeps the strip */
-          }
-        }
-        return undefined;
-      }, [sessionRunning, props.openStream]);
-      React.useEffect(function () {
-        if (!ticking) return undefined;
-        const timer = setInterval(function () { setNow(Date.now()); }, 500);
-        return function () { clearInterval(timer); };
-      }, [ticking]);
-      if (view === undefined || view === null || turn === undefined) return null;
-      const t = props.t;
-      const first = running.slice(0, 3);
-      const lastSettled = settled.slice(-3);
-      const hidden = ticking ? running.length - first.length : settled.length - lastSettled.length;
-      const elapsed = turn.endTime === null || turn.endTime === undefined
-        ? now - num(turn.startTime)
-        : num(turn.endTime) - num(turn.startTime);
-      const rows = ticking
-        ? first.map(function (call, index) {
-          const tool = typeof call.tool === 'string' && call.tool ? call.tool : '?';
-          const summary = typeof call.summary === 'string' && call.summary ? call.summary : tool;
-          return h('div', { className: 'tu-row', key: call.callId || 'running-' + index },
-            statusDot(statusMeta('running'), true),
-            toolBadge(tool),
-            h('span', { className: 'tu-summary' }, summary),
-            h('span', { className: 'tu-dur' }, fmtMs(now - num(call.startTime))),
-            call.command !== null && call.command !== undefined
-              ? h('code', { className: 'tu-cmd', title: String(call.command) }, String(call.command))
-              : null,
-          );
-        })
-        : lastSettled.map(function (call, index) { return callRow(call, index, t); });
-      return h('div', { className: 'tu-live' },
-        h('div', { className: 'tu-live-head', role: 'status', 'aria-live': 'polite' },
-          statusDot(ticking ? statusMeta('running') : { token: '--dsw-alias-state-idle-primary' }, ticking),
-          h('span', { className: 'tu-live-title' }, t(ticking ? 'live.title.running' : 'live.title.idle')),
-          h('span', { className: 'tu-live-meta' }, t('live.meta', {
-            turn: turnNo,
-            calls: num(turn.calls),
-            errors: num(turn.errors),
-            time: fmtMs(elapsed),
-          })),
-        ),
-        rows.length > 0
-          ? h('div', { className: 'tu-live-rows' }, rows)
-          : h('div', { className: 'tu-live-empty' }, t('live.waiting')),
-        hidden > 0 ? h('div', { className: 'tu-more' }, t('live.more', { count: hidden })) : null,
-      );
-    }
-
-    // ------------------------------------------------------------------
-    // Entry 2: per-turn dashboard card in the chat flow.
+    // Entry 1: per-turn dashboard card in the chat flow.
     // ------------------------------------------------------------------
 
     /** One per-tool bar row for a turn summary card. */
@@ -893,7 +777,7 @@ window.__ModuleLoader__.load({
     }
 
     // ------------------------------------------------------------------
-    // Entry 3: session dashboard view tab.
+    // Entry 2: session dashboard view tab.
     // ------------------------------------------------------------------
 
     /** Filter buttons of the recent-call list. */
@@ -1041,12 +925,38 @@ window.__ModuleLoader__.load({
     }
 
     // ------------------------------------------------------------------
-    // Entry 4: right-Sidebar live stream tab.
+    // Entry 3: right-Sidebar live stream tab.
     // ------------------------------------------------------------------
 
-    /** Compact manual control in the session header that reveals the stream tab. */
+    /** Session-header control that reveals the stream tab and auto-opens it once per Session mount. */
     function StreamHeaderButton(props) {
       const t = props.t;
+      // Auto-open once when this Session starts running. The ref survives
+      // re-renders, so a manual close is not undone by later status changes.
+      const sessionRunning = typeof props.useSessionStatus === 'function'
+        ? props.useSessionStatus(function (state) {
+          try {
+            if (state === null || state === undefined || typeof state.get !== 'function') return false;
+            const status = state.get(props.sessionId);
+            return status !== null && status !== undefined && status.running === true;
+          } catch (error) {
+            return false;
+          }
+        })
+        : false;
+      const autoOpened = React.useRef(false);
+      React.useEffect(function () {
+        if (sessionRunning !== true || autoOpened.current) return undefined;
+        autoOpened.current = true;
+        if (typeof props.openStream === 'function') {
+          try {
+            props.openStream();
+          } catch (error) {
+            /* a profile without the right Sidebar simply keeps the header button */
+          }
+        }
+        return undefined;
+      }, [sessionRunning, props.openStream]);
       return h('button', {
         type: 'button',
         className: 'tu-header-action',
@@ -1155,17 +1065,6 @@ window.__ModuleLoader__.load({
         }, 'tool-usage: stylesheet');
         // The view tab label must follow the active locale without re-registration.
         const t = ctx.locale.bind(NS);
-        ctx.slots.inject('conversation.input.dock', function () {
-          return ctx.slots.register({
-            name: 'conversation.input.dock',
-            id: 'tool-usage-live',
-            order: 15,
-            locale: NS,
-            inject: function (sessionId) {
-              return { openStream: function () { openStream(sessionId); } };
-            },
-          }, LiveStrip);
-        });
         ctx.slots.inject('conversation.chat.turnTail', function () {
           return ctx.slots.register({
             name: 'conversation.chat.turnTail',
