@@ -51,7 +51,13 @@ function disposerFor(value) {
  * Minimal fake Cordis context. Records listeners, registered tools, command
  * definitions and effect cleanups so tests can drive and dispose the plugin.
  */
-function makeFakeContext({ commandsAvailable = false, commandDisposeDelayMs = 0, catalog = {} } = {}) {
+function makeFakeContext({
+  commandsAvailable = false,
+  commandDisposeDelayMs = 0,
+  catalog = {},
+  projectionsAvailable = false,
+  projectionsRegisterError = undefined,
+} = {}) {
   const state = {
     listeners: [],
     tools: new Map(),
@@ -59,6 +65,8 @@ function makeFakeContext({ commandsAvailable = false, commandDisposeDelayMs = 0,
     cleanups: [],
     injections: [],
     logs: [],
+    projections: [],
+    projectionReleases: 0,
   }
   const logger = makeLogger(state.logs)
 
@@ -87,9 +95,8 @@ function makeFakeContext({ commandsAvailable = false, commandDisposeDelayMs = 0,
       inject(deps, callback) {
         const dependencyList = Array.isArray(deps) ? deps : [deps]
         state.injections.push(dependencyList)
-        const isAvailable = dependencyList.includes('commands') && commandsAvailable
-        let dispose = async () => {}
-        if (isAvailable) {
+        const disposals = []
+        if (dependencyList.includes('commands') && commandsAvailable) {
           const childCtx = makeCtx()
           childCtx.commands = {
             register(definition) {
@@ -100,13 +107,31 @@ function makeFakeContext({ commandsAvailable = false, commandDisposeDelayMs = 0,
             },
           }
           const cleanup = disposerFor(callback(childCtx))
-          dispose = async () => {
+          disposals.push(async () => {
             if (commandDisposeDelayMs > 0) await sleep(commandDisposeDelayMs)
             await cleanup()
+          })
+        }
+        if (dependencyList.includes('sessionProjections') && projectionsAvailable) {
+          const childCtx = makeCtx()
+          childCtx.sessionProjections = {
+            register(definition) {
+              if (projectionsRegisterError !== undefined) throw projectionsRegisterError
+              state.projections.push(definition)
+              return Promise.resolve({
+                dispose: async () => { state.projectionReleases += 1 },
+              })
+            },
           }
+          const cleanup = disposerFor(callback(childCtx))
+          disposals.push(cleanup)
         }
         // Real Cordis returns a Fiber; `index.ts` disposes it via `fiber.dispose()`.
-        return { dispose }
+        return {
+          async dispose() {
+            for (const disposal of disposals) await disposal()
+          },
+        }
       },
       tools: {
         register(definition) {
@@ -577,4 +602,63 @@ test('/tool-usage reset rewrites the aggregate snapshot and keeps the JSONL log'
   const restored = await runToolUsage(second.state, { view: 'summary', scope: 'all' })
   assert.equal(restored.totals.calls, 0)
   await disposeContext(second.state)
+})
+
+
+test('the Web UI projection registers by default and releases on teardown', async (t) => {
+  const outputDir = await makeOutputDir(t)
+  const { ctx, state } = makeFakeContext({ projectionsAvailable: true })
+  apply(ctx, { outputDir, statsWriteDebounceMs: 10, restoreStats: false })
+
+  assert.equal(state.projections.length, 1, 'the toolUsage projection must be registered once')
+  const definition = state.projections[0]
+  assert.equal(definition.key, 'toolUsage')
+  assert.equal(definition.stateVersion, 1)
+  assert.equal(definition.wire.summary, false)
+
+  await disposeContext(state)
+  await waitUntil(() => state.projectionReleases >= 1, { label: 'the projection registration release' })
+})
+
+test('uiEnabled false skips the projection while keeping recording', async (t) => {
+  const outputDir = await makeOutputDir(t)
+  const { ctx, state } = makeFakeContext({ projectionsAvailable: true })
+  apply(ctx, { uiEnabled: false, outputDir, statsWriteDebounceMs: 10, restoreStats: false })
+
+  assert.equal(state.projections.length, 0, 'uiEnabled false must not register the projection')
+  const listener = toolsExecuteListener(state)
+  await listener(makeExecution({ callId: 'ui-off' }), async () => successResult())
+  await waitUntil(async () => (await readCallRecords(outputDir)).length >= 1)
+  await disposeContext(state)
+})
+
+test('a missing projection registry keeps the plugin loadable and recording', async (t) => {
+  const outputDir = await makeOutputDir(t)
+  const { ctx, state } = makeFakeContext({ projectionsAvailable: false })
+  apply(ctx, { outputDir, statsWriteDebounceMs: 10, restoreStats: false })
+
+  assert.equal(state.projections.length, 0)
+  const listener = toolsExecuteListener(state)
+  await listener(makeExecution({ callId: 'no-registry' }), async () => successResult())
+  await waitUntil(async () => (await readCallRecords(outputDir)).length >= 1)
+  assert.equal(state.logs.some(args => String(args[0]).includes('toolUsage projection')), false)
+  await disposeContext(state)
+})
+
+test('a failing projection registration warns and leaves the recorder working', async (t) => {
+  const outputDir = await makeOutputDir(t)
+  const { ctx, state } = makeFakeContext({
+    projectionsAvailable: true,
+    projectionsRegisterError: new Error('projection registry unavailable'),
+  })
+  apply(ctx, { outputDir, statsWriteDebounceMs: 10, restoreStats: false })
+
+  assert.ok(
+    state.logs.some(args => String(args[0]).includes('failed to register the toolUsage projection')),
+    'a projection registration failure must be logged as a warning',
+  )
+  const listener = toolsExecuteListener(state)
+  await listener(makeExecution({ callId: 'projection-failed' }), async () => successResult())
+  await waitUntil(async () => (await readCallRecords(outputDir)).length >= 1)
+  await disposeContext(state)
 })

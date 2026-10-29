@@ -21,9 +21,17 @@ instruments every tool call made by an agent and provides:
    / min / max / last), error counts, plus per-session and global scopes. Exposed
    through a model-callable `tool_usage` tool and a human `/tool-usage` slash
    command, and persisted so numbers survive a restart.
+4. **Live Web UI** — a Host-registered session projection (`toolUsage`) pushes
+   the current turn's running calls to the browser. The Web UI shows a live
+   activity strip above the composer (tool, shell command, deterministic
+   explanation, elapsed time), renders a per-turn dashboard card after a turn
+   closes, and contributes a session-wide 「调用看板 / Calls」 conversation view
+   tab. The UI is a read-only window onto the same fold; it registers no tool,
+   prompt section, or model input.
 
-Non-goals (v1): browser/UI rendering of statistics, Prometheus/OTLP export,
-LLM-generated explanations, sampling, retention policies, per-agent dashboards.
+Non-goals (v0.2): Prometheus/OTLP export, LLM-generated explanations, sampling,
+retention policies, per-agent dashboards, programmatic view switching between
+registered conversation tabs, and remote/network rendering.
 
 Everything stays on the local machine: no network requests, no telemetry, no
 model calls for recording or explanation.
@@ -47,6 +55,8 @@ plugins/tool-usage/
   src/warn.ts         shared warn-once diagnostics helper (one warning per failure class)
   src/tool.ts         model-callable `tool_usage` tool (defineTool)
   src/command.ts      optional human `/tool-usage` slash command
+  src/projection.ts   `toolUsage` session projection: live, bounded wire view of calls
+  client.js           hand-written Web client half (no build): live strip, turn card, dashboard tab
   scripts/build.mjs   deterministic clean build (npm typescript, else DSH checkout)
   tsconfig.json
   cordis.patch.yml
@@ -68,13 +78,28 @@ ESM with no bundler or loader.
 ```json
 {
   "name": "dsh-plugin-tool-usage",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "license": "MIT",
   "engines": { "dsh": ">=0.2.0-0 <0.3.0" },
-  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+  "exports": {
+    ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
+    "./client": "./client.js"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    }
+  }
 }
 ```
 
@@ -92,6 +117,10 @@ Rules:
   and no build permission. Rebuild with `npm run build` whenever `src/` changes.
 - `@deepseek-ai/*` packages appear in both `peerDependencies` (shared with the
   DSH host instance) and `devDependencies` (type checking and standalone tests).
+- The client half is plain JavaScript (`client.js`) loaded through the Web
+  module loader; it requires only the loader-provided `react` and declares no
+  build step. `dsh.client` makes the installed bundle contribute its browser
+  module; `./client` is the module entry.
 
 ## 4. Bundle patch
 
@@ -138,11 +167,99 @@ Behavior:
    service still load the plugin. The effect cleanup returns an async function that
    awaits `fiber.dispose()`, so a hot reload cannot overlap the old and new command
    registrations.
-7. On dispose: flush the log queue and write the final statistics snapshot.
+7. When `uiEnabled` is true, register the `toolUsage` session projection through
+   another **nested** optional `ctx.inject(['sessionProjections'], ...)`, so a
+   profile without the projection registry still loads the plugin. Registration
+   and release are effect-scoped; failures warn instead of failing the load.
+8. On dispose: flush the log queue and write the final statistics snapshot.
 
 All listeners and registrations are effect-scoped, so a hot reload disposes the
 previous instance cleanly (including a final flush) and a re-apply creates a
 fresh store. Logging goes through `ctx.logger`; the plugin never uses `console.*`.
+
+The projection is registered through a local structural face
+(`SessionProjectionsFace`) rather than a type import of
+`@deepseek-ai/dsh-session-projection`, preserving the zero-runtime-dependency
+rule; the registration contract is covered by the projection unit tests.
+
+### 5.3 Live UI projection (`src/projection.ts`)
+
+`createToolUsageProjectionDefinition(config)` returns a projection unit for key
+`toolUsage` (`stateVersion: 1`, `wire.summary: false`). It folds the committed
+Session log; it does not observe `tools/execute`, does not write files, and does
+not change any tool result. The unit is independent of the recorder: an event
+that the recorder sees is also folded here, so a cancelled call settles as
+`aborted` when its turn closes even though no result event landed.
+
+Fold semantics:
+
+- `turn/start` opens a turn row (`outcome: 'open'`, `endTime: null`).
+- `tool/call` parses the raw arguments, **redacts** them, derives the one-line
+  explanation (reusing `explain.ts` in `brief` mode; empty when `explain: 'off'`)
+  and, for bash-family tools, the shell command line. It increments whole-session
+  and per-tool call counts and opens a running row.
+- `tool/result` pairs by `callId`, computes `durationMs` from event times, maps
+  `ABORTED` / `ABORTED_BEFORE_DISPATCH` to `aborted`, other `isError` results to
+  `error`, and everything else to `ok`. Failures also count in the tool/turn/total
+  `errors` fields; aborted calls are tracked but not counted as failures.
+- `turn/end` closes the turn row and settles any still-running call as `aborted`
+  (no permanently spinning row).
+- Any other event returns the same state reference, so the registry's
+  `Object.is` gate skips all downstream work.
+
+Bounds and privacy:
+
+- Settled calls are a ring of `uiRecentCalls`; turn rows are a ring of
+  `uiRecentTurns`; whole-session totals and per-tool aggregates cover the full
+  log; the wire `byTool` table is the top 20 by call count.
+- The wire view contains only derived `summary` text, the extracted shell
+  command line (`uiCommandChars`), status/duration/turn identifiers, numbers, and
+  — for failed calls only — the bounded failure text the recorder already writes
+  locally (`maxStringChars`). Raw argument objects and redacted parameter objects
+  never cross the wire.
+- State is plain JSON because the projection cache checkpoints it; the fold is
+  synchronous and deterministic.
+
+### 5.4 Web client half (`client.js`)
+
+`client.js` is hand-written plain JavaScript loaded through
+`window.__ModuleLoader__.load` with factory id `dsh-plugin-tool-usage`. It
+returns `{ inject: ['slots', 'locale'], apply(ctx) }` and registers, all inside
+`ctx.effect`:
+
+1. a live activity strip in `conversation.input.dock` (id `tool-usage-live`,
+   order 15) showing the active turn's running calls — tool badge, explanation,
+   shell command, ticking elapsed time — and the last settled calls when nothing
+   is running; hidden when no turn is open;
+2. a per-turn dashboard card in `conversation.chat.turnTail` (id
+   `tool-usage-summary`, order 5) after a turn closes: call/error counts, total
+   and average duration, per-tool bars, shell-command count, and a collapsed
+   call-detail list;
+3. a session-wide dashboard in `conversation.view` (id `tool-usage-calls`,
+   order 20, label `调用看板` / `Calls`): totals, per-tool table, turn timeline,
+   and a filterable recent-call list;
+4. a right-Sidebar tab type `tool-usage-stream` (implementation id
+   `dsh-plugin-tool-usage-stream`, `multiple: false`, `keepMounted: true`) with
+   its body in the keyed `sidebar.right.pane.tab`, a conversation-header action
+   (id `tool-usage-stream`), and a guide entry. The body is a full-height,
+   scrollable, fixed-length (latest 50) newest-first stream of shell commands
+   and tool calls, with running calls pinned and a 500 ms elapsed tick. It is
+   auto-opened once per page load when the current Session starts running, using
+   a ref guard so a manual close is not undone. The right tab's registration and
+   opener live behind an optional nested `ctx.inject(['sidebarRight',
+   'sidebarRightTabs'], …)`, so a profile without the right Sidebar keeps the
+   other three entries. When the Host projection is unavailable, the tab falls
+   back to standard `useChat` data (running calls and settled `tool-result`
+   nodes) and derives the same rows locally. This fallback also covers
+   `uiEnabled: false`: the other three surfaces render nothing, while the stream
+   keeps showing what the conversation already renders.
+
+The components read the projection only through standard props
+(`useProjection('toolUsage', selector)`); they never fold Session events and
+never call the Host. They register a `tool-usage-ui` locale namespace with
+complete zh/en dictionaries and use only `--dsw-alias-*` theme tokens for color.
+The client half requires no module other than the loader-provided `react`; it
+adds no tool, prompt section, or service.
 
 ### 5.2 Recording (`src/recorder.ts`)
 
@@ -221,6 +338,10 @@ tolerated, and invalid values warn once instead of failing the load.
 | `commandName` | `"tool-usage"` | Slash-command name without `/`; lowercased, leading `/` stripped, must match `[a-z][a-z0-9_-]*`. |
 | `statsWriteDebounceMs` | `2000` | Debounce for `stats.json` writes; disposal flushes immediately. |
 | `includeParamsInReport` | `true` | Include redacted parameters in the `recent[]` entries of the canonical snapshot returned by the tool/command; the Markdown renderers never show parameters. |
+| `uiEnabled` | `true` | Register the client-facing `toolUsage` session projection. `false` keeps the recorder/tool/command and makes the three projection-backed UI surfaces render nothing; the right-side stream falls back to Chat data. |
+| `uiRecentCalls` | `60` | Recent settled calls carried in the projection wire view (1–500). Whole-session totals are unaffected. |
+| `uiRecentTurns` | `30` | Recent turn rows carried in the projection wire view (1–200). `totals.turns` still counts every observed turn. |
+| `uiCommandChars` | `240` | Character cap on the shell command line carried in the projection wire view (1–1000), ellipsized. |
 
 Validation semantics: type errors fall back to the default, numeric values are
 truncated and clamped into range, enum values are case-insensitive, and
@@ -434,6 +555,11 @@ The command output uses the same Markdown renderer as the model tool.
 `lib/types/index.d.ts` must exist because `package.json#types` points there;
 without `declarationDir`, tsc would emit `lib/index.d.ts` instead.
 
+`client.js` is deliberately outside this build: it is committed plain
+JavaScript, syntax-checked by the test suite and served directly by the Web
+module loader. `npm pack --dry-run` and the package tests assert that it exists,
+parses, and is listed in `files`.
+
 ## 15. Tests
 
 `node --test 'tests/*.test.mjs'` from the package directory (`node:test` and
@@ -462,7 +588,18 @@ without `declarationDir`, tsc would emit `lib/index.d.ts` instead.
    flush.
 7. `package` (static) — `dsh.bundle.patch`, `main` exists, `engines.dsh` admits
    the supported DSH version, patch inserts the expected row, locale files parse,
-   every `files` entry exists.
+   every `files` entry exists, the `dsh.client` block and `./client` export are
+   present, and `client.js` parses as plain JavaScript with `react` as its only
+   module-table require.
+8. `projection` — turn grouping, call/report pairing, `ok`/`error`/`aborted`
+   mapping, turn-end settling of unsettled calls, whole-session vs bounded-ring
+   totals, top-20 tool rows, redaction/non-leakage of argument values, explain
+   off, command clipping, JSON-serializable state, and identity-preserving
+   unknown events.
+9. `client` (browser module, stub React) — the module-loader registration shape,
+   the three slot entries and ids/orders/locale namespace, and rendered output
+   (live command, per-turn counts, dashboard totals) against synthetic
+   projection frames.
 
 ## 16. End-to-end verification
 
@@ -490,6 +627,17 @@ fails closed with `SANDBOX_UNAVAILABLE`. Run the one-shot task with
 `DSH_PERMISSION_MODE=danger-full-access` (the outer workspace sandbox still
 confines it); this is an environment constraint, not a plugin defect.
 
+The Web UI packaging path has its own reusable check,
+`verification/ui-boot.mjs`. It creates an isolated `web` profile, installs the
+bundle, boots the real Web server on a loopback port, reads the boot graph the
+server serves, and downloads the client bundle URL it advertises. It asserts
+that the `dsh-plugin-tool-usage` entry is present with `immediately: true`, the
+declared inject edges, and a `./client` URL whose body is the package's client
+half registering all three slots. It needs `DSH_CHECKOUT` and `pnpm` but no model
+credentials, and it removes its isolated home and package stores afterwards. It
+does not replace browser-level visual verification of layout, theme, or
+interaction.
+
 ## 17. Compatibility and versioning
 
 - `engines.dsh: ">=0.2.0-0 <0.3.0"` is declared and enforced by DSH at install
@@ -498,7 +646,11 @@ confines it); this is an environment constraint, not a plugin defect.
 - `@deepseek-ai/dsh-tools`, `-commands`, and `cordis` peer ranges follow the same
   compatible release line.
 - The plugin version follows Semantic Versioning; record-format changes bump
-  `v` in `CallRecord` and are documented in `CHANGELOG.md`.
+  `v` in `CallRecord`, and projection shape changes bump
+  `TOOL_USAGE_PROJECTION_STATE_VERSION`; both are documented in `CHANGELOG.md`.
+- `0.2.0` adds the Web client half and the `toolUsage` projection. Existing
+  configs and records remain valid; a page refresh is required after upgrading a
+  running Web profile so the new browser module is loaded.
 - The `lib/` output is committed and CI checks it matches a fresh build, so a
   clone is always installable without a build step.
 
@@ -521,6 +673,19 @@ pair/array shapes (`headers: [["Authorization", "Bearer ..."]]`,
 tighter caps, or disabling persistence. Failure `error.message`/`error.code` text is
 recorded up to `maxStringChars` and is not key-redacted.
 
+The Web UI widens the exposure surface only with derived data. The `toolUsage`
+projection is folded from committed Session events, and its wire view carries the
+redacted-argument-derived explanation summary, the extracted bash command line
+(already visible in the chat transcript), status/duration/turn identifiers, and
+aggregates. It does not carry raw argument objects or redacted parameter objects;
+for a failed call it carries the same bounded failure text the recorder already
+writes to its local log (`maxStringChars`). The browser module has no network
+access and no Host RPC; it reads the projection only. `uiEnabled: false` removes
+the projection entirely, leaving the previous host-only behavior: the live
+strip, per-turn card, and session dashboard render nothing, while the right-side
+stream falls back to Chat data (the calls the conversation already renders) and
+sends nothing new off the machine.
+
 ## 19. Change process
 
 1. Behavior changes update this document first (or in the same change), then the
@@ -530,3 +695,105 @@ recorded up to `maxStringChars` and is not key-redacted.
    before opening a pull request.
 4. Verification evidence under `plugins/*/verification/` is refreshed when the
    behavior it proves changes; never fabricate or hand-edit results.
+
+## 20. Web UI view contract (appendix)
+
+The projection wire view is the single interface between the Host fold and the
+browser half. It is whole-value JSON, pushed by the session-projection seam;
+`undefined` means the Host has no registered `toolUsage` unit (or the session has
+no baseline yet), and every client component must render nothing (or the view
+tab's empty state) in that case.
+
+```ts
+interface ToolUsageView {
+  v: 1
+  generatedAt: number              // epoch ms of the last folded event; 0 when empty
+  language: 'zh' | 'en'
+  totals: {
+    calls: number                  // started (settled + running)
+    settled: number
+    errors: number                 // status === 'error' (aborted is not a failure)
+    running: number
+    totalMs: number
+    avgMs: number                  // totalMs / settled, 0 when settled === 0
+    maxMs: number
+    tools: number                  // distinct tools over the whole session
+    turns: number                  // turns observed over the whole session
+  }
+  byTool: Array<{                  // top 20 by calls, then name
+    tool: string
+    calls: number
+    errors: number
+    totalMs: number
+    avgMs: number
+    maxMs: number
+    lastMs: number
+    lastAt: number
+  }>
+  turns: Array<{                   // most recent uiRecentTurns, ascending
+    turn: number
+    startTime: number
+    endTime: number | null         // null while open
+    calls: number
+    errors: number
+    totalMs: number
+    outcome: 'open' | 'completed' | 'aborted' | 'blocked' | 'error'
+      | 'max-tokens' | 'interrupted' | 'forked'
+  }>
+  calls: Array<{                   // most recent uiRecentCalls, ascending by endTime
+    callId: string
+    tool: string
+    summary: string                // '' when explain: 'off'
+    command: string | null         // bash-family command line, capped by uiCommandChars
+    turn: number
+    step: number
+    startTime: number
+    endTime: number
+    durationMs: number
+    status: 'ok' | 'error' | 'aborted'
+    error: string | null           // bounded failure text for 'error'
+  }>
+  running: Array<{                 // start order
+    callId: string
+    tool: string
+    summary: string
+    command: string | null
+    turn: number
+    step: number
+    startTime: number
+  }>
+}
+```
+
+UI behavior contract:
+
+- **Live strip** (`conversation.input.dock`, id `tool-usage-live`): shown only
+  while the latest turn row is open. It shows up to three running calls (tool,
+  one-line explanation, command line, elapsed time ticking every 500 ms) or, when
+  nothing runs, the last settled calls of that turn. Header copy is localized and
+  announced through `role="status"` / `aria-live="polite"`.
+- **Turn card** (`conversation.chat.turnTail`, id `tool-usage-summary`): rendered
+  after the owning turn closes and only when that turn made calls. It shows the
+  outcome, call/error counts, total and average duration, top-five tool bars, the
+  shell-command count, and a collapsed `查看 N 次调用明细` list. It points the
+  reader at the session dashboard tab; it does not switch views itself (the
+  Client API exposes no cross-plugin view selection).
+- **Dashboard tab** (`conversation.view`, id `tool-usage-calls`, label
+  `调用看板` / `Calls`): session-wide metric cards, per-tool table with share
+  bars, recent turn timeline, and a recent-call list filterable by
+  `全部 / 失败 / Shell`.
+- **Right-side stream** (`sidebar.right.pane.tab`, tab kind `tool-usage-stream`,
+  id `dsh-plugin-tool-usage-stream`): opened automatically once per Session per
+  page load when the Session starts running, and reopenable from the
+  conversation-header 「调用流」 / "Calls" action or the right-Sidebar guide. A
+  full-height header plus a scrollable fixed-length list (50 rows, newest first)
+  of status, time, tool, explanation, shell command, duration, and turn; running
+  calls stay pinned with a ticking elapsed time. When the Host projection is
+  missing, the body derives rows from `useChat` (legacy running calls + settled
+  tool-result nodes) instead of failing.
+- All four use the `tool-usage-ui` locale namespace (complete `zh` + `en`) and
+  `--dsw-alias-*` theme tokens for color; no other Client package is imported
+  at runtime beyond the loader-provided React.
+- Bounded lists mean a very long session shows aggregate totals for the whole
+  log while call/turn detail covers the recent window; the turn card notes when
+  older calls were omitted.

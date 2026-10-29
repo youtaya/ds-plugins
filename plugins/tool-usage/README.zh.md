@@ -2,11 +2,11 @@
 
 [English](README.md)
 
-记录智能体每一次工具调用，为每次调用生成确定性的可读解释，并按工具、按会话统计调用次数与耗时。数据全部留在本机。
+记录智能体每一次工具调用，为每次调用生成确定性的可读解释，并按工具、按会话统计调用次数与耗时。在 Web UI 中还会显示输入框上方的实时活动条、每轮结束后的看板卡片，以及整个会话的调用看板视图页。数据全部留在本机。
 
 | 项目 | 值 |
 | --- | --- |
-| 插件包 | `dsh-plugin-tool-usage` 0.1.0 —— DSH 组合包插件（Cordis 插件名 `tool-usage`） |
+| 插件包 | `dsh-plugin-tool-usage` 0.2.0 —— DSH 组合包插件（Cordis 插件名 `tool-usage`） |
 | 模型工具 | `tool_usage`（可通过 `toolName` 改名） |
 | 斜杠命令 | `/tool-usage`（可通过 `commandName` 改名） |
 | 数据目录 | `$DSH_HOME/tool-usage/`，默认 `~/.dsh/tool-usage/` |
@@ -102,7 +102,7 @@ Search the web: deepseek harness plugin
 
 ## 统计
 
-插件在内存中维护聚合数据，不对每次查询扫描 JSONL。
+插件在内存中维护聚合数据，不对每次查询扫描 JSONL。Web UI 读取同一份内存数据的会话投影，见 [Web UI 看板](#web-ui-看板)。
 
 **按工具聚合**（`tools` 视图的每一行，按调用次数从多到少排列）：`calls`（调用次数）、`errors`（失败数：`error` 与 `threw`；`aborted` 反映调用方取消，不计为失败）、`errorRate`（失败率，保留 4 位小数）、`totalMs`、`avgMs`、`minMs`、`maxMs`、`lastMs`（最近一次耗时）、`lastAt`（最近一次调用时间）、`slowCalls`（慢调用次数）。持久化文件里的聚合还会保存 `statusCounts`（各状态计数）。
 
@@ -116,6 +116,27 @@ Search the web: deepseek harness plugin
 - **并行调用会重叠**：耗时是 `performance.now()` 的前后差；`totalMs` 是各次调用耗时之和，因此并行执行时可能大于墙钟经过的时间。`avgMs` 是单次调用平均值，不是吞吐。
 - **持久化**：聚合结果写入 `stats.json`，插件重启时在 `restoreStats: true` 且 `persistStats: true` 时恢复（恢复采用加法合并，启动读取期间产生的调用不会被丢弃），因此跨重启的计数保持连续；`recent` 列表只存在内存中，重启后从空开始，历史调用以 JSONL 为准。
 - `snapshot` 中的毫秒值统一保留 1 位小数。
+
+## Web UI 看板
+
+在 Web / Desktop profile 中，插件还提供一个浏览器半侧（`client.js`，通过 `dsh.client` 声明 `platform: "web"`），渲染四个界面——其中三个来自宿主注册的同一个会话投影，另有一个优先读取该投影、缺失时回退到 Chat 数据的右侧实时调用流：
+
+- **实时活动条**（输入框上方，`conversation.input.dock`，id `tool-usage-live`，order 15）：本轮进行中时显示正在执行的工具调用、当前 Shell 命令和每次调用的一行解释；没有调用在跑时显示本轮最近完成的调用。没有打开的轮次时不显示。
+- **每轮看板**（每轮结束后，`conversation.chat.turnTail`，id `tool-usage-summary`，order 5）：每个执行了工具调用的已完成轮次一张卡片，包含结果状态、调用与失败次数、总耗时与平均耗时、按工具条形图、Shell 命令数，以及可展开的该轮调用明细列表。
+- **会话看板**（会话视图页签，`conversation.view`，id `tool-usage-calls`，order 20，标签「调用看板」/ Calls）：整个会话的总计与失败率、按工具表格、轮次时间线和最近调用，支持「全部 / 失败 / Shell」筛选。
+- **右侧实时调用流**（右侧栏页签类型 `tool-usage-stream`，实现 id `dsh-plugin-tool-usage-stream`）：可滚动的固定长度列表（最新 50 条，倒序），逐条显示状态、时间、工具名、一行解释、等宽 Shell 命令和耗时；执行中的调用固定在顶部，已用时间每 500 ms 刷新。每次页面加载后，当前会话第一次进入运行状态时自动打开一次（用户手动关闭后不会再次自动打开），也可通过会话头部的「调用流」/ Calls 按钮或右侧栏引导页重新打开。宿主投影不可用时（例如旧 Host 进程或未注册投影的 profile），面板回退到 Chat 数据，仍能实时展示同样的调用行。
+
+宿主以 `toolUsage` 为键注册会话投影，并声明 `wire.summary: false`，因此该值不包含在会话列表摘要里，由 Web 客户端按需读取。每次调用开始/结束、每轮开始/结束时，投影都以整值帧下发。线上载荷只包含派生数据——一行解释摘要、Shell 命令行、状态、耗时与失败文本——不包含已记录的原始参数对象。浏览器半侧有独立的中英文 locale 命名空间，只使用主题 token，跟随宿主主题与浏览器语言；不发起网络请求，投影走既有的本机会话通道。
+
+**统计数字覆盖整个会话日志**（投影从会话起点折叠已提交事件），而**列表是有界窗口**：最近 `uiRecentCalls` 条已结束调用（默认 60）、最近 `uiRecentTurns` 轮（默认 30），按工具表格最多 20 个工具。某一轮的旧调用已被窗口挤出时，该轮卡片会注明；总计仍会统计它们。
+
+语言与解释行为：
+
+- UI 文案跟随 Web UI 语言；调用的解释仍使用插件的 `language` 配置，因为解释是记录时在宿主生成的。
+- `explain: off` 时没有摘要，视图退化为显示工具名；`brief` / `detailed` 时显示一行摘要。Shell 命令行只对 `bash` 及其别名的调用存在。
+- 设 `uiEnabled: false` 可跳过投影注册，实时活动条、每轮看板与会话看板随之不渲染；右侧调用流仍以 Chat 数据回退模式工作（展示的就是对话界面已经渲染的同一批调用）。记录、统计、`tool_usage` 工具与 `/tool-usage` 命令不受影响。
+
+升级插件后，重启 profile 并刷新一次浏览器页面，让 Web 客户端加载新的客户端 bundle。
 
 ## 安装与移除
 
@@ -139,7 +160,7 @@ dsh --profile <profile>
 
 已经有一份 checkout 时，直接传该包的绝对路径即可：`dsh plugin --profile <profile> add <指向该仓库的绝对路径>/plugins/tool-usage`。
 
-重启该 profile 后生效（在支持热加载的开发会话中也可依赖 HMR，但以重启为准）。
+重启该 profile 后生效（在支持热加载的开发会话中也可依赖 HMR，但以重启为准）。升级插件后，重启 profile 并刷新页面，让浏览器加载新的客户端 bundle。
 
 移除：
 
@@ -160,6 +181,8 @@ dsh plugin --profile <profile> remove dsh-plugin-tool-usage
     language: en
     explain: brief
     slowThresholdMs: 10000
+    uiRecentCalls: 120
+    uiCommandChars: 160
 ```
 
 补丁按 id **整段替换** `config`，不会逐键合并；但插件会为缺失的键套用默认值，所以只写想改的键即可。需要保留非默认值时，把它们一起写出来。
@@ -169,9 +192,9 @@ dsh plugin --profile <profile> remove dsh-plugin-tool-usage
 - DSH `>=0.2.0-0 <0.3.0`（声明于 `engines.dsh`）；已对 DSH `0.2.2-alpha.2` 验证。
 - 构建、测试本仓库需要 Node.js `>=24.9`（`.nvmrc` 固定 `24.19.0`，也是验证所用版本）；安装后的插件运行在 DSH 宿主进程内，不引入独立的 Node 运行时。
 - DSH profile 提供的 peer 包：`@deepseek-ai/cordis >=4.0.0-0 <5.0.0`、`@deepseek-ai/dsh-tools >=0.2.0-0 <0.3.0`、`@deepseek-ai/dsh-commands >=0.2.0-0 <0.3.0`。
-- 运行时导入仅限 `node:*` 内置模块与 `@deepseek-ai/dsh-tools`；不安装、也不打包其他依赖。
-- Web / Desktop profile 会注册 `/tool-usage` 命令；headless profile 没有该命令，但记录与 `tool_usage` 工具照常工作。
-- 仅支持 Node ESM。本包尚未发布到 npm，请按上面的方式从本地 checkout 安装。
+- 宿主侧运行时导入仅限 `node:*` 内置模块与 `@deepseek-ai/dsh-tools`；浏览器半侧只依赖加载器提供的 `react`。不安装、也不打包其他依赖。
+- Web / Desktop profile 会注册 `/tool-usage` 命令并提供 Web UI 看板（包通过 `dsh.client` 声明并提供纯 JavaScript 的 `client.js` bundle）；headless profile 仍会记录调用并提供 `tool_usage` 工具，但不渲染 UI。
+- 宿主代码仅支持 Node ESM。本包尚未发布到 npm，请按上面的方式从本地 checkout 安装。
 
 ## 配置
 
@@ -193,6 +216,10 @@ dsh plugin --profile <profile> remove dsh-plugin-tool-usage
 | `commandName` | `"tool-usage"` | 斜杠命令名，不含 `/`；自动转小写并去掉前缀 `/`，需匹配 `[a-z][a-z0-9_-]*`，否则回退默认值。 |
 | `statsWriteDebounceMs` | `2000` | `stats.json` 写盘防抖窗口；退出时会立即落盘。 |
 | `includeParamsInReport` | `true` | 工具/命令快照输出中的 `recent[]` 是否附带脱敏后的参数；Markdown 报告本身不展示参数。 |
+| `uiEnabled` | `true` | 布尔值。是否注册 `toolUsage` 会话投影并渲染它的三个 Web UI 界面。`false` 时不注册投影，这三个界面不渲染；右侧调用流仍以 Chat 数据回退模式工作。记录、统计、工具与命令不受影响。 |
+| `uiRecentCalls` | `60` | 整数，1–500。投影携带并在看板中列出的最近已结束调用条数。更早的调用退出列表，但总计仍包含它们。 |
+| `uiRecentTurns` | `30` | 整数，1–200。投影携带的最近轮次数（每轮卡片与看板时间线）。更早的轮次退出列表，但总计仍包含它们。 |
+| `uiCommandChars` | `240` | 整数，1–1000。投影携带并在 UI 中展示的单条 Shell 命令行的字符上限；超出部分截断并加 `…`。 |
 
 补充：`$DSH_HOME` 取 `process.env.DSH_HOME`（去掉首尾空白），未设置时用 `~/.dsh`。非法配置值不会让插件加载失败：类型错误、非法枚举值与非法命令名回退到默认值，数值越界夹取到允许区间，并记录一条警告。
 
@@ -269,7 +296,7 @@ dsh plugin --profile <profile> remove dsh-plugin-tool-usage
 tail -n 5 ~/.dsh/tool-usage/calls-$(date +%F).jsonl
 ```
 
-权限：目录以 `0o700` 创建，文件以 `0o600` 写入，即只有当前用户可读。已存在但权限更宽的当日日志文件（例如旧版本留下的 `0644`）会在本进程首次追加时被重新收紧为 `0o600`。插件不会写 `outputDir` 之外的位置，也不会发起任何网络请求——数据不离开本机。
+权限：目录以 `0o700` 创建，文件以 `0o600` 写入，即只有当前用户可读。已存在但权限更宽的当日日志文件（例如旧版本留下的 `0644`）会在本进程首次追加时被重新收紧为 `0o600`。插件不会写 `outputDir` 之外的位置，也不会发起任何网络请求——数据不离开本机。Web UI 投影由宿主侧已提交的会话事件折叠而成；其载荷只包含派生数据——一行解释摘要、（截断后的）Shell 命令行、状态、耗时与失败文本——不包含已记录的原始参数对象。
 
 脱敏与截断（写入记录与解释之前执行）：
 
@@ -290,6 +317,7 @@ tail -n 5 ~/.dsh/tool-usage/calls-$(date +%F).jsonl
 - 聚合在内存中完成，`tool_usage` 查询和 `/tool-usage` 命令不会扫描 JSONL。
 - `stats.json` 写盘默认防抖 2 秒，退出时强制 flush，写放大被摊薄。
 - 记录数据的内存占用有界：聚合按工具/会话计数，最近调用受 `recentLimit`（默认 200）限制，单条记录的每个字段都有上限（参数、字符串、失败信息/错误码、解释摘要/明细）。唯一可能临时无界增长的是磁盘停滞时排队的 JSONL 行：每行仍是一条有上限的记录，写入完成后队列即排空。
+- Web UI 投影同样有界：每个会话一个派生视图，最多 `uiRecentCalls` 条已结束调用、`uiRecentTurns` 轮、20 个工具行，只在调用开始/结束或轮次开始/结束时重算。
 - 不采样、不联网、不调用模型。
 
 ## 禁用
@@ -305,9 +333,12 @@ tail -n 5 ~/.dsh/tool-usage/calls-$(date +%F).jsonl
 
 **每次调用的成本。** 一个包装函数、一次微秒级的纯函数解释、一次哈希表聚合，加上一条排入后台队列的 JSONL 追加；不等待磁盘、不发网络请求、不复制工具结果。统计快照定期落盘，查询永不触发全量扫描。开销与工具本身耗时相比可以忽略，且失败时静默降级，不影响工具调用。
 
-## 局限（v1）
+## 局限
 
-- 不渲染浏览器 UI：没有统计卡片或图表页面，数据通过工具、命令、JSONL 和 `stats.json` 查看。
+- Web UI 是**会话内、向前看**的：它只渲染本会话从插件加载起的在内存调用，不回放历史 JSONL 记录。插件重启后投影从空开始；JSONL 日志仍保留历史，但 UI 不读取它。
+- 看板列表是有界窗口（`uiRecentCalls` 条已结束调用、`uiRecentTurns` 轮、按工具表格最多 20 个工具）。总计覆盖整个会话，但更早的个别调用不会列出。
+- Web UI 只在 Web / Desktop profile 中存在；headless profile 没有看板。
+- 升级插件后，浏览器会保留之前加载的客户端 bundle，直到刷新页面。
 - 不导出 Prometheus / OTLP，不做采样，不做基于 LLM 的解释。
 - JSONL 按日期分文件但**不自动清理**：没有保留期或轮转策略，长期使用需要自行归档或删除旧文件。
 - `stats.json` 是单个聚合快照、最后写入者生效，因此假定每个 `$DSH_HOME` 只有一个 DSH 进程；只追加的 JSONL 日志在并发写入下仍然安全。

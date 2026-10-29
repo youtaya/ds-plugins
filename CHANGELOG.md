@@ -6,6 +6,38 @@ and each package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 Plugins are versioned independently; the version in a heading belongs to the
 plugin named in that section.
 
+## [0.2.0] - 2026-10-29
+
+### Added
+
+- `dsh-plugin-tool-usage` 0.2.0 — Web UI dashboard release.
+  - Host-registered session projection `toolUsage` that folds tool-call and turn
+    events into one derived view: session totals, per-tool aggregates, a turn
+    timeline, a bounded window of recent settled calls, and the currently
+    running calls. The projection declares `wire.summary: false`, so it is not
+    carried in session-list summaries, and its wire payload contains only
+    derived data — the one-line explanation summary, the shell command line,
+    aggregate numbers, and bounded failure text for failed calls — never the
+    recorded raw parameter object.
+  - Three Web UI entries served by a plain-JavaScript client bundle
+    (`client.js`, declared through `dsh.client`, no build step): a live activity
+    strip above the composer (`conversation.input.dock`), a per-turn dashboard
+    card after each completed turn (`conversation.chat.turnTail`), and a
+    session-wide "Calls" / 「调用看板」 conversation view tab
+    (`conversation.view`), plus a right-Sidebar "Calls stream" / 「调用流」 tab
+    that auto-opens once when the current Session starts running and shows a
+    scrollable fixed-length newest-first list of shell commands and tool calls
+    (latest 50, running calls pinned with a ticking elapsed time). All entries
+    carry Chinese/English copy and theme-token styling; the right tab falls back
+    to Chat data when the Host projection is unavailable.
+  - New optional config fields: `uiEnabled` (default `true`), `uiRecentCalls`
+    (default `60`, 1–500), `uiRecentTurns` (default `30`, 1–200), and
+    `uiCommandChars` (default `240`, 1–1000). Override them by id `tool-usage`
+    in `cordis.patch.yml`. The views reuse the existing `language` and
+    `explain` settings for call explanations.
+  - Projection unit tests and client bundle tests covering the three slot
+    registrations, the rendered dashboard content, and the bounded wire view.
+
 ## [0.1.0] - 2026-10-29
 
 ### Added
@@ -30,4 +62,5 @@ plugin named in that section.
     `DSH_HOME`, and live Web-profile activation evidence under
     `plugins/tool-usage/verification/`.
 
+[0.2.0]: https://github.com/youtaya/dsh-plugins/releases/tag/v0.2.0
 [0.1.0]: https://github.com/youtaya/dsh-plugins/releases/tag/v0.1.0

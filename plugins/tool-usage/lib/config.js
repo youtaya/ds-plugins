@@ -32,6 +32,10 @@ const DEFAULT_CONFIG = {
     commandName: DEFAULT_COMMAND_NAME,
     statsWriteDebounceMs: 2000,
     includeParamsInReport: true,
+    uiEnabled: true,
+    uiRecentCalls: 60,
+    uiRecentTurns: 30,
+    uiCommandChars: 240,
 };
 /**
  * Resolve the DSH home directory from the environment.
@@ -129,6 +133,10 @@ export function resolveConfig(rawConfig, options = {}) {
         commandName: readCommandName(raw, warn),
         statsWriteDebounceMs: readInteger(raw, 'statsWriteDebounceMs', DEFAULT_CONFIG.statsWriteDebounceMs, 0, 3_600_000, warn),
         includeParamsInReport: readBoolean(raw, 'includeParamsInReport', DEFAULT_CONFIG.includeParamsInReport, warn),
+        uiEnabled: readBoolean(raw, 'uiEnabled', DEFAULT_CONFIG.uiEnabled, warn),
+        uiRecentCalls: readInteger(raw, 'uiRecentCalls', DEFAULT_CONFIG.uiRecentCalls, 1, 500, warn),
+        uiRecentTurns: readInteger(raw, 'uiRecentTurns', DEFAULT_CONFIG.uiRecentTurns, 1, 200, warn),
+        uiCommandChars: readInteger(raw, 'uiCommandChars', DEFAULT_CONFIG.uiCommandChars, 1, 1000, warn),
     };
 }
 function readRedactKeys(raw, warn) {

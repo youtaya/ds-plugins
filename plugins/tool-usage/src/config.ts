@@ -54,6 +54,14 @@ export interface ToolUsageConfig {
   statsWriteDebounceMs: number
   /** Include redacted parameters in report/snapshot output. */
   includeParamsInReport: boolean
+  /** Register the client-facing `toolUsage` session projection for the Web UI. */
+  uiEnabled: boolean
+  /** Number of recent settled calls carried in the projection wire view. */
+  uiRecentCalls: number
+  /** Number of recent turns carried in the projection wire view. */
+  uiRecentTurns: number
+  /** Character cap for the shell command line carried in the projection wire view. */
+  uiCommandChars: number
 }
 
 /** Default directory template, expanded against the running DSH home. */
@@ -80,6 +88,10 @@ const DEFAULT_CONFIG: Omit<ToolUsageConfig, 'outputDir' | 'redactKeys'> = {
   commandName: DEFAULT_COMMAND_NAME,
   statsWriteDebounceMs: 2000,
   includeParamsInReport: true,
+  uiEnabled: true,
+  uiRecentCalls: 60,
+  uiRecentTurns: 30,
+  uiCommandChars: 240,
 }
 
 /** Dependencies for {@link resolveConfig}. */
@@ -186,6 +198,10 @@ export function resolveConfig(rawConfig: unknown, options: ResolveConfigOptions 
     commandName: readCommandName(raw, warn),
     statsWriteDebounceMs: readInteger(raw, 'statsWriteDebounceMs', DEFAULT_CONFIG.statsWriteDebounceMs, 0, 3_600_000, warn),
     includeParamsInReport: readBoolean(raw, 'includeParamsInReport', DEFAULT_CONFIG.includeParamsInReport, warn),
+    uiEnabled: readBoolean(raw, 'uiEnabled', DEFAULT_CONFIG.uiEnabled, warn),
+    uiRecentCalls: readInteger(raw, 'uiRecentCalls', DEFAULT_CONFIG.uiRecentCalls, 1, 500, warn),
+    uiRecentTurns: readInteger(raw, 'uiRecentTurns', DEFAULT_CONFIG.uiRecentTurns, 1, 200, warn),
+    uiCommandChars: readInteger(raw, 'uiCommandChars', DEFAULT_CONFIG.uiCommandChars, 1, 1000, warn),
   }
 }
 

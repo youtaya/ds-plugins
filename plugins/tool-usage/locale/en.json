@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Tool usage statistics",
-    "description": "Records every tool call with redacted parameters and a readable explanation, and reports call counts, errors, and latency per tool.",
+    "description": "Records every tool call with redacted parameters and a readable explanation, reports call counts, errors, and latency per tool, and adds a live tool-usage dashboard to the Web UI.",
     "detail": "docs/DETAIL.md"
   }
 }

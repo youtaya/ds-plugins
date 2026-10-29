@@ -2,11 +2,11 @@
 
 [中文](README.zh.md)
 
-Records every tool call an agent makes, gives each call a deterministic human-readable explanation, and reports per-tool and per-session call counts and latency. Everything stays on the local machine.
+Records every tool call an agent makes, gives each call a deterministic human-readable explanation, and reports per-tool and per-session call counts and latency. In the Web UI it adds a live activity strip above the composer, a dashboard card after each turn, and a session-wide calls view tab. Everything stays on the local machine.
 
 | Item | Value |
 | --- | --- |
-| Package | `dsh-plugin-tool-usage` 0.1.0 — a DSH bundle plugin (Cordis plugin name `tool-usage`) |
+| Package | `dsh-plugin-tool-usage` 0.2.0 — a DSH bundle plugin (Cordis plugin name `tool-usage`) |
 | Model tool | `tool_usage` (rename with `toolName`) |
 | Slash command | `/tool-usage` (rename with `commandName`) |
 | Data directory | `$DSH_HOME/tool-usage/` (default `~/.dsh/tool-usage/`) |
@@ -117,6 +117,27 @@ Semantics:
 - **Persistence**: aggregates are written to `stats.json` and restored on restart when `restoreStats: true` and `persistStats: true`, so counts continue across restarts. Restoration merges additively into the live store, so calls recorded while the startup read is in flight are not lost. The `recent` list is memory-only and starts empty after a restart; the JSONL log is the source of history.
 - All millisecond values in snapshots are rounded to 1 decimal.
 
+## Web UI dashboard
+
+In a Web or Desktop profile the package also ships a browser half (`client.js`, declared through `dsh.client` with `platform: "web"`) that renders four surfaces — three from one Host-registered session projection, plus a right-Sidebar live stream that prefers that projection and falls back to Chat data:
+
+- **Live activity strip** above the composer (`conversation.input.dock`, id `tool-usage-live`, order 15). While a turn is open it shows the running tool calls, the current shell command, and each call's one-line explanation; when nothing is running it shows the turn's most recent settled calls. It is hidden when no turn is open.
+- **Per-turn dashboard** after each completed turn (`conversation.chat.turnTail`, id `tool-usage-summary`, order 5). One card per completed turn that made tool calls, with an outcome pill, call and error counts, total and average latency, per-tool bars, the shell-command count, and a collapsible list of that turn's calls.
+- **Session dashboard** in the conversation view tabs (`conversation.view`, id `tool-usage-calls`, order 20, label "Calls" / 「调用看板」). Whole-session totals and failure rate, a per-tool table, a turn timeline, and recent calls with All / Failed / Shell filters.
+- **Right-side live stream** (right-Sidebar tab type `tool-usage-stream`, implementation id `dsh-plugin-tool-usage-stream`). A scrollable, fixed-length newest-first list of the Session's tool calls (latest 50) showing status, time, tool, one-line explanation, the monospace shell command, and duration. Running calls stay pinned at the top with a 500 ms ticking elapsed time. It opens automatically the first time the current Session starts running on a page load — once, so closing it does not reopen it — and can be reopened from the conversation-header 「调用流」 / "Calls" button or the right-Sidebar guide. If the Host projection is unavailable (an older Host process or a profile without it), the panel falls back to the Chat data and still streams the same rows.
+
+The Host registers the session projection with key `toolUsage` and declares `wire.summary: false`, so the value is not carried in session-list summaries; the Web client reads it on demand. The projection is delivered as whole-value frames whenever a call starts or settles or a turn opens or closes. Its wire payload contains only derived data — the one-line explanation summary, the shell command line, statuses, timing, and failure text — never the recorded raw parameter object. The client half has its own Chinese/English locale namespace and uses only theme tokens, so it follows the harness theme and browser language. It makes no network request: the projection travels over the existing local session channel.
+
+The **numbers cover the whole session log** (the projection folds the committed events from the Session's start), while the **lists are a bounded recent window**: the last `uiRecentCalls` settled calls (default 60) and the last `uiRecentTurns` turns (default 30), and the per-tool table shows at most 20 tools. When older calls of a turn have fallen out of the window, its card says so; totals keep counting them.
+
+Language and explanation behavior:
+
+- UI labels follow the Web UI language; call explanations keep using the plugin's `language` config, because they are generated on the Host when the call is recorded.
+- With `explain: off` there is no summary, so the views fall back to the tool name; with `brief` or `detailed` the one-line summary is shown. Shell command lines are available for `bash` (and its aliases) only.
+- Set `uiEnabled: false` to skip the projection registration; the live strip, per-turn card, and session dashboard then render nothing. The right-side stream still works in its Chat-data fallback mode (it shows the same calls the conversation already renders); recording, statistics, the `tool_usage` tool, and the `/tool-usage` command are unaffected.
+
+After upgrading the package, restart the profile and refresh the browser page once so the Web client loads the new client bundle.
+
 ## Install and remove
 
 `lib/` is committed in the package, so installation needs no build script and no extra build permission. The package is not yet published to npm; install it from a checkout of the repository.
@@ -139,7 +160,7 @@ dsh --profile <profile>
 
 If you already have a checkout, pass its package path directly instead: `dsh plugin --profile <profile> add <abs path to>/plugins/tool-usage`.
 
-The plugin takes effect after restarting the profile (HMR in development sessions may apply it too, but a restart is authoritative).
+The plugin takes effect after restarting the profile (HMR in development sessions may apply it too, but a restart is authoritative). After upgrading the package, restart the profile and refresh the Web page so the browser loads the new client bundle.
 
 Removal:
 
@@ -160,6 +181,8 @@ The bundle patch inserts a single row with no `config`; all defaults live in the
     language: en
     explain: brief
     slowThresholdMs: 10000
+    uiRecentCalls: 120
+    uiCommandChars: 160
 ```
 
 A patch **replaces** the targeted row's whole `config`; it does not merge key by key. The plugin applies defaults to missing keys, so restating only the keys you change is enough. Restate any non-default value you want to keep.
@@ -169,9 +192,9 @@ A patch **replaces** the targeted row's whole `config`; it does not merge key by
 - DSH `>=0.2.0-0 <0.3.0` (declared as `engines.dsh`); verified against DSH `0.2.2-alpha.2`.
 - Node.js `>=24.9` for building and testing this repository (`.nvmrc` pins `24.19.0`, the version used for verification); the installed plugin runs inside the DSH host process and adds no separate Node runtime.
 - Peer packages supplied by the DSH profile: `@deepseek-ai/cordis >=4.0.0-0 <5.0.0`, `@deepseek-ai/dsh-tools >=0.2.0-0 <0.3.0`, and `@deepseek-ai/dsh-commands >=0.2.0-0 <0.3.0`.
-- Runtime imports are limited to `node:*` built-ins and `@deepseek-ai/dsh-tools`; nothing else is installed or bundled.
-- Web / Desktop profiles get the `/tool-usage` command; a headless profile still records calls and exposes the `tool_usage` tool.
-- Node ESM only. The plugin is not yet published to npm; install from a local checkout as shown above.
+- Host-side runtime imports are limited to `node:*` built-ins and `@deepseek-ai/dsh-tools`; the browser half requires only the loader-provided `react`. Nothing else is installed or bundled.
+- Web / Desktop profiles get the `/tool-usage` command and the Web UI dashboard (the package declares `dsh.client` and ships the plain-JavaScript `client.js` bundle); a headless profile still records calls and exposes the `tool_usage` tool, but renders no UI.
+- Host code is Node ESM only. The plugin is not yet published to npm; install from a local checkout as shown above.
 
 ## Configuration
 
@@ -193,6 +216,10 @@ A patch **replaces** the targeted row's whole `config`; it does not merge key by
 | `commandName` | `"tool-usage"` | Slash command name without `/`; lowercased automatically, a leading `/` is stripped, and it must match `[a-z][a-z0-9_-]*` (otherwise the default is used). |
 | `statsWriteDebounceMs` | `2000` | Debounce window for `stats.json` writes; disposal flushes immediately. |
 | `includeParamsInReport` | `true` | Whether `recent[]` entries in tool/command snapshot output carry the redacted parameters. The Markdown reports never show parameters. |
+| `uiEnabled` | `true` | Boolean. Register the `toolUsage` session projection and render its three Web UI views. `false` skips the projection, so those three surfaces render nothing; the right-side stream keeps working from its Chat-data fallback. Recording, statistics, and the tool/command are unaffected. |
+| `uiRecentCalls` | `60` | Integer, 1–500. Number of most recent settled calls carried by the projection and listed in the dashboard. Older calls fall out of the lists; totals are unaffected. |
+| `uiRecentTurns` | `30` | Integer, 1–200. Number of most recent turns carried by the projection (turn card and dashboard timeline). Older turns fall out of the lists; totals are unaffected. |
+| `uiCommandChars` | `240` | Integer, 1–1000. Maximum characters of one shell command line carried in the projection and shown in the UI; longer commands are truncated with `…`. |
 
 `$DSH_HOME` comes from `process.env.DSH_HOME` (trimmed); when unset, `~/.dsh` is used. Invalid values do not fail plugin loading: wrong types, unknown enum values, and invalid command names fall back to their defaults, out-of-range numbers are clamped to the allowed interval, and a warning is logged.
 
@@ -269,7 +296,7 @@ Read today's records with:
 tail -n 5 ~/.dsh/tool-usage/calls-$(date +%F).jsonl
 ```
 
-Permissions: the directory is created with `0o700`, files with `0o600` — readable by the current user only. An existing daily log file that is looser (for example a `0644` file left by an older version) is re-tightened to `0o600` once per process on its first append. The plugin writes nowhere outside `outputDir` and makes no network requests: data never leaves the machine.
+Permissions: the directory is created with `0o700`, files with `0o600` — readable by the current user only. An existing daily log file that is looser (for example a `0644` file left by an older version) is re-tightened to `0o600` once per process on its first append. The plugin writes nowhere outside `outputDir` and makes no network requests: data never leaves the machine. The Web UI projection is folded from committed session events on the Host; its wire payload carries only derived data — the one-line explanation summary, the (truncated) shell command line, statuses, timing, and failure text — never the recorded raw parameter object.
 
 Redaction and truncation happen before a record or explanation is built:
 
@@ -290,6 +317,7 @@ Note: redaction is key-name based. A secret embedded in a value (for example `--
 - Aggregates are maintained in memory, so `tool_usage` queries and the `/tool-usage` command never scan the JSONL log.
 - `stats.json` writes are debounced (default 2 s) and flushed on dispose, keeping write amplification low.
 - Memory is bounded for recorded data: aggregates are counters per tool/session, recent calls are capped at `recentLimit` (default 200), and every record field is capped (params, strings, failure message/code, explanation summary/details). The one unbounded temporary structure is the queue of pending JSONL lines while the disk is stalled: each queued line is one bounded record and the queue drains when the write completes.
+- The Web UI projection is bounded the same way: one derived view per session with at most `uiRecentCalls` settled calls, `uiRecentTurns` turns, and 20 tool rows, recomputed only when a call starts or settles or a turn opens or closes.
 - No sampling, no network, no model calls.
 
 ## Disabling
@@ -305,9 +333,12 @@ Note: redaction is key-name based. A secret embedded in a value (for example `--
 
 **Cost per call.** One wrapper function invocation, one microsecond-scale pure explanation, one hash-map aggregate update, and one JSONL append queued in the background; no disk wait, no network request, no copy of the tool result. Snapshots are written periodically, and queries never scan. The overhead is negligible next to the tool itself, and recording degrades silently on failure without affecting the call.
 
-## Limitations (v1)
+## Limitations
 
-- No browser UI: no statistics card or chart page. Data is available through the tool, the command, the JSONL log, and `stats.json`.
+- The Web UI is **session-scoped and forward-looking**: it renders the current session's in-memory calls from the point the plugin loaded and does not replay historical JSONL records. A plugin restart starts the projection empty; the JSONL log still holds the history, but the UI does not read it.
+- The dashboard lists are a bounded recent window (`uiRecentCalls` settled calls, `uiRecentTurns` turns, at most 20 tools in the per-tool table). Totals cover the whole session, but individual older calls are not listed.
+- The Web UI exists only in Web / Desktop profiles. A headless profile has no dashboard.
+- After upgrading the package, the browser keeps the previously loaded client bundle until the page is refreshed.
 - No Prometheus / OTLP export, no sampling, no LLM-generated explanations.
 - JSONL files are split by date but are **not rotated or cleaned automatically**: there is no retention policy, so archive or delete old files yourself for long-running use.
 - `stats.json` is one aggregate snapshot with last-writer-wins semantics, so it assumes a single DSH process per `$DSH_HOME`; the append-only JSONL log stays safe with concurrent writers.

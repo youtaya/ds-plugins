@@ -1,18 +1,23 @@
 {
   "name": "dsh-plugin-tool-usage",
-  "version": "0.1.0",
-  "description": "Records every agent tool call with its arguments, a human-readable explanation, and per-tool count/latency statistics.",
+  "version": "0.2.0",
+  "description": "Records every agent tool call with a human-readable explanation, and shows live calls plus a per-task dashboard in the Web UI.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
-    ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
+    "client.js",
     "lib/**/*.js",
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
@@ -31,7 +36,10 @@
     "tool-calls",
     "observability",
     "statistics",
-    "agent"
+    "agent",
+    "dashboard",
+    "live-ui",
+    "web-ui"
   ],
   "repository": {
     "type": "git",
@@ -45,8 +53,23 @@
   "publishConfig": {
     "access": "public"
   },
-  "engines": { "dsh": ">=0.2.0-0 <0.3.0" },
-  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "engines": {
+    "dsh": ">=0.2.0-0 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    }
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0-0 <5.0.0",
     "@deepseek-ai/dsh-tools": ">=0.2.0-0 <0.3.0",

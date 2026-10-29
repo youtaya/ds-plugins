@@ -12,7 +12,7 @@ Out-of-tree bundle plugins for [DeepSeek Harness](https://github.com/deepseek-ai
 
 | Package | Version | Description | Documentation |
 | --- | --- | --- | --- |
-| [`dsh-plugin-tool-usage`](plugins/tool-usage) | 0.1.0 | Records every agent tool call with redacted parameters and a readable explanation, then reports per-tool call counts, errors, and latency. | [English](plugins/tool-usage/README.md) · [中文](plugins/tool-usage/README.zh.md) |
+| [`dsh-plugin-tool-usage`](plugins/tool-usage) | 0.2.0 | Records every agent tool call with redacted parameters and a readable explanation, reports per-tool call counts, errors, and latency, and adds a live Web UI dashboard (activity strip, per-turn cards, session calls view, and a right-side live tool-call stream). | [English](plugins/tool-usage/README.md) · [中文](plugins/tool-usage/README.zh.md) |
 
 Each package has its own README with the full behavior, configuration, and privacy documentation; this file covers the repository as a whole.
 
@@ -58,12 +58,13 @@ The packages are not yet published to npm; installing from a local package direc
     └── tool-usage/              # dsh-plugin-tool-usage
         ├── src/                 # TypeScript sources
         ├── lib/                 # committed build output (ESM + .d.ts)
+        ├── client.js            # plain-JavaScript Web client bundle (no build step)
         ├── scripts/build.mjs    # deterministic clean build (npm typescript or DSH checkout)
         ├── cordis.patch.yml     # bundle layer: inserts the tool-usage row
         ├── locale/{en,zh}.json  # plugin display metadata
         ├── docs/DETAIL*.md      # plugin detail pages shipped with the package
         ├── tests/               # node:test suite against the built lib/
-        └── verification/        # unit/E2E/live-activation reports and the E2E harness
+        └── verification/        # unit/E2E/live-activation/UI reports and harnesses
 ```
 
 ## Development
@@ -72,7 +73,7 @@ The packages are not yet published to npm; installing from a local package direc
 cd plugins/tool-usage
 npm install          # dev dependencies: typescript, @types/node, DSH alpha type packages
 npm run build        # regenerate the committed lib/
-npm test             # node:test suite (133 tests)
+npm test             # node:test suite
 ```
 
 From the repository root:
@@ -98,7 +99,9 @@ Each package ships its evidence under `plugins/<name>/verification/`:
 - [`unit-report.md`](plugins/tool-usage/verification/unit-report.md) — build and test commands, per-file results, and the environment used.
 - [`e2e-report.md`](plugins/tool-usage/verification/e2e-report.md) — a real headless DSH process in an isolated `DSH_HOME`, with PASS/FAIL per assertion and the exact commands.
 - [`live-activation.md`](plugins/tool-usage/verification/live-activation.md) — activation in a running Web profile, with live JSONL records, `stats.json`, and a real `tool_usage` report.
+- [`ui-activation.md`](plugins/tool-usage/verification/ui-activation.md) — the 0.2.0 Web UI evidence: unit/browser-half results, the isolated real-Web-server boot check (boot graph + served client bundle), the upgrade/refresh path, and the remaining visual-verification limit.
 - [`e2e/setup-and-run.mjs`](plugins/tool-usage/verification/e2e/setup-and-run.mjs) — reusable E2E harness with `--dry-run`, `--no-llm`, `--skip-error`, and `--error-only` modes; it recreates its own isolated home and never touches the live `~/.dsh`.
+- [`ui-boot.mjs`](plugins/tool-usage/verification/ui-boot.mjs) — reusable Web UI packaging check: installs the bundle into an isolated `web` profile, boots the real Web server, and asserts the boot graph advertises the client half and the served bundle registers the three slots.
 
 ```sh
 DSH_CHECKOUT=/path/to/deepseek-harness node plugins/tool-usage/verification/e2e/setup-and-run.mjs

@@ -12,7 +12,7 @@
 
 | 包 | 版本 | 说明 | 文档 |
 | --- | --- | --- | --- |
-| [`dsh-plugin-tool-usage`](plugins/tool-usage) | 0.1.0 | 记录每次 agent 工具调用（参数脱敏）并生成可读解释，按工具统计调用次数、失败数与耗时。 | [English](plugins/tool-usage/README.md) · [中文](plugins/tool-usage/README.zh.md) |
+| [`dsh-plugin-tool-usage`](plugins/tool-usage) | 0.2.0 | 记录每次 agent 工具调用（参数脱敏）并生成可读解释，按工具统计调用次数、失败数与耗时，并在 Web UI 中提供实时看板（活动条、每轮卡片、会话调用看板，以及右侧实时工具调用流）。 | [English](plugins/tool-usage/README.md) · [中文](plugins/tool-usage/README.zh.md) |
 
 每个包有自己的 README，完整说明行为、配置与隐私；本文件只介绍整个仓库。
 
@@ -58,12 +58,13 @@ dsh plugin --profile <profile> remove dsh-plugin-tool-usage
     └── tool-usage/              # dsh-plugin-tool-usage
         ├── src/                 # TypeScript 源码
         ├── lib/                 # 已提交的构建产物（ESM + .d.ts）
+        ├── client.js            # 纯 JavaScript 的 Web 客户端 bundle（无构建步骤）
         ├── scripts/build.mjs    # 确定性的干净构建（npm typescript 或 DSH checkout）
         ├── cordis.patch.yml     # bundle 层：插入 tool-usage 行
         ├── locale/{en,zh}.json  # 插件展示元数据
         ├── docs/DETAIL*.md      # 随包发布的插件详情页
         ├── tests/               # 针对 lib/ 的 node:test 测试
-        └── verification/        # 单元/E2E/在线激活报告与 E2E harness
+        └── verification/        # 单元/E2E/在线激活/UI 报告与 harness
 ```
 
 ## 开发
@@ -72,7 +73,7 @@ dsh plugin --profile <profile> remove dsh-plugin-tool-usage
 cd plugins/tool-usage
 npm install          # 开发依赖：typescript、@types/node、DSH alpha 类型包
 npm run build        # 重新生成已提交的 lib/
-npm test             # node:test 测试（133 个）
+npm test             # node:test 测试
 ```
 
 在仓库根目录：
@@ -98,7 +99,9 @@ DSH_CHECKOUT=/path/to/deepseek-harness node plugins/tool-usage/scripts/build.mjs
 - [`unit-report.md`](plugins/tool-usage/verification/unit-report.md) —— 构建与测试命令、逐文件结果、运行环境。
 - [`e2e-report.md`](plugins/tool-usage/verification/e2e-report.md) —— 在隔离 `DSH_HOME` 中运行真实 headless DSH 进程，逐条断言 PASS/FAIL，并记录完整命令。
 - [`live-activation.md`](plugins/tool-usage/verification/live-activation.md) —— 在运行中的 Web profile 中激活插件的证据：实时 JSONL 记录、`stats.json` 与真实的 `tool_usage` 报告。
+- [`ui-activation.md`](plugins/tool-usage/verification/ui-activation.md) —— 0.2.0 Web UI 证据：单测/浏览器半侧结果、隔离真实 Web server 启动检查（启动图 + 实际下发的 client bundle）、升级刷新路径，以及尚未完成的视觉验证限制。
 - [`e2e/setup-and-run.mjs`](plugins/tool-usage/verification/e2e/setup-and-run.mjs) —— 可复用 E2E harness，支持 `--dry-run`、`--no-llm`、`--skip-error`、`--error-only`；它只重建自己的隔离 home，不会触碰线上 `~/.dsh`。
+- [`ui-boot.mjs`](plugins/tool-usage/verification/ui-boot.mjs) —— 可复用 Web UI 打包检查：把 bundle 安装进隔离 `web` profile、启动真实 Web server，并断言启动图包含浏览器半侧、下发的 bundle 注册了三个插槽。
 
 ```sh
 DSH_CHECKOUT=/path/to/deepseek-harness node plugins/tool-usage/verification/e2e/setup-and-run.mjs

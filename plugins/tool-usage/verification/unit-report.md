@@ -1,6 +1,8 @@
 # Unit verification report — `dsh-plugin-tool-usage`
 
-Status: **PASS** — the built plugin (v0.1.0) passes the full unit + integration suite.
+Status: **PASS** — the built plugin (v0.2.0) passes the full unit + integration suite.
+See §0.1 for the 0.2.0 Web UI addendum; the v0.1.0 evidence below is retained as
+history and remains reproducible on that release.
 
 | Item | Value |
 | --- | --- |
@@ -16,6 +18,48 @@ Status: **PASS** — the built plugin (v0.1.0) passes the full unit + integratio
 
 > Placeholder: `<workspace>` is the `ds-plugins` checkout root; `<dsh-checkout>` is a DSH
 > source checkout. Machine-specific absolute paths were removed for the public release.
+
+---
+
+## 0.1 v0.2.0 addendum (2026-10-29)
+
+The Web UI release adds a Host session projection (`src/projection.ts`), the
+plain-JavaScript browser half (`client.js`), four `ui*` config fields, and the
+`dsh.client` declaration. The final suite on this build:
+
+```console
+$ cd <workspace>/plugins/tool-usage
+$ npm ci
+$ npm run build
+build: compiling with <workspace>/plugins/tool-usage/node_modules/typescript/bin/tsc
+built 3978 line(s) to lib/
+$ npm test
+ℹ tests 178
+ℹ pass 178
+ℹ fail 0
+ℹ skipped 0
+ℹ duration_ms ~370
+```
+
+| File | Tests | Scope added in 0.2.0 |
+| --- | --- | --- |
+| `client.test.mjs` | 21 | browser bundle: module-loader shape, five slot registrations + right-Sidebar tab type, locale parity, live ticking, null states, turn card, dashboard filters, right-side stream (projection and Chat fallback, 50-row cap), auto-open once, English |
+| `config.test.mjs` | 13 | `ui*` defaults, clamping, invalid-value warnings |
+| `package.test.mjs` | 11 | `dsh.client`, `./client`, `client.js` in `files`, plain-JS parse/no Harness imports |
+| `plugin.test.mjs` | 18 | projection registration/release, `uiEnabled: false`, missing registry, registration-failure tolerance |
+| `projection.test.mjs` | 17 | fold semantics, bounded rings vs whole-session totals, privacy, JSON state |
+| others (`explain`, `log`, `recorder`, `redact`, `stats`, `tool`) | 98 | unchanged contracts, still green |
+
+`npm pack --dry-run --cache <workspace>/.tmp/npm-cache --ignore-scripts` reports
+`dsh-plugin-tool-usage-0.2.0.tgz` with 35 files (97.8 kB packed / 333.5 kB
+unpacked), including `client.js` (62.5 kB), `lib/projection.js`, and the
+projection declarations, and no `src/`, `tests/`, or `verification/` entries.
+`node scripts/check-public.mjs` passes (105 candidate files).
+
+The browser half was also checked against a real freshly booted isolated DSH Web
+server (boot graph + served bundle). See `verification/ui-activation.md` for the
+15/15 PASS harness run, the observed boot-graph entry, the upgrade/refresh path,
+and the remaining visual-verification limit.
 
 ---
 
@@ -219,7 +263,10 @@ or hidden by weakening a test.
 
 ## 8. Verdict
 
-- 133/133 unit + integration tests pass, 0 skipped, exit code 0 — run on 2026-10-29 after the review fixes.
+- 178/178 unit + integration tests pass for v0.2.0, 0 skipped, exit code 0 — run
+  on 2026-10-29 after the Web UI change (v0.1.0's 133/133 run remains in §0.1–§7).
+- The v0.2.0 browser half additionally passed the isolated real-Web-server boot
+  check (15/15 assertions, `verification/ui-activation.md`).
 - `npm run build` exits 0 and emits the complete ESM + types layout (22 committed files, including the new `src/warn.ts` output).
 - Package manifest is release-ready (`repository`/`homepage`/`bugs`/`author`/`keywords`/`publishConfig`/`scripts`, pinned devDependencies, committed `package-lock.json`), and `npm pack --dry-run` contains no junk (32 files, including `lib/warn.js` + `lib/types/warn.d.ts`, no `src/`, `tests/`, or `verification/`).
 - E2E activation/wiring passed on the pre-fix build and again on the final build (23/23 assertions; see `e2e-report.md` §3–§11); the record-format and restore/reset changes are additionally covered by this suite.

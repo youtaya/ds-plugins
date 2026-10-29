@@ -42,6 +42,39 @@ function withEnv(t, patch) {
   }
 }
 
+test('Web UI projection bounds have documented defaults and clamping', (t) => {
+  withEnv(t, { DSH_HOME: undefined })
+  const defaults = resolveConfig(undefined, { logger: makeLogger() })
+  assert.equal(defaults.uiEnabled, true)
+  assert.equal(defaults.uiRecentCalls, 60)
+  assert.equal(defaults.uiRecentTurns, 30)
+  assert.equal(defaults.uiCommandChars, 240)
+
+  const clamped = resolveConfig({
+    uiEnabled: false,
+    uiRecentCalls: 10_000,
+    uiRecentTurns: 0,
+    uiCommandChars: 0,
+  }, { logger: makeLogger() })
+  assert.equal(clamped.uiEnabled, false)
+  assert.equal(clamped.uiRecentCalls, 500)
+  assert.equal(clamped.uiRecentTurns, 1)
+  assert.equal(clamped.uiCommandChars, 1)
+
+  const invalid = makeLogger()
+  const normalized = resolveConfig({
+    uiEnabled: 'yes',
+    uiRecentCalls: 'many',
+    uiRecentTurns: null,
+    uiCommandChars: Number.NaN,
+  }, { logger: invalid })
+  assert.equal(normalized.uiEnabled, true)
+  assert.equal(normalized.uiRecentCalls, 60)
+  assert.equal(normalized.uiRecentTurns, 30)
+  assert.equal(normalized.uiCommandChars, 240)
+  assert.ok(invalid.messages.length >= 4, 'each invalid UI field should warn once')
+})
+
 test('documented defaults are applied when config is omitted', (t) => {
   withEnv(t, { DSH_HOME: undefined })
   const logger = makeLogger()

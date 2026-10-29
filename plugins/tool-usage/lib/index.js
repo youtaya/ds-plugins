@@ -12,6 +12,7 @@
 import { createCommand } from './command.js';
 import { resolveConfig } from './config.js';
 import { JsonlCallLog } from './log.js';
+import { createToolUsageProjectionDefinition } from './projection.js';
 import { ToolUsageRecorder } from './recorder.js';
 import { StatsStore } from './stats.js';
 import { createToolUsageTool } from './tool.js';
@@ -126,8 +127,56 @@ export function apply(ctx, rawConfig) {
             }
         };
     });
+    // Optional Web UI data: a session projection carrying live call state to the
+    // browser (`toolUsage`). Nested optional injection keeps every profile that
+    // lacks the projection registry loadable. The registry's typed surface is
+    // consumed structurally here so the plugin keeps zero runtime dependencies.
+    if (config.uiEnabled) {
+        ctx.effect(() => {
+            let fiber;
+            try {
+                fiber = injectSessionProjections(ctx, (scope) => {
+                    try {
+                        const registration = scope.sessionProjections.register(createToolUsageProjectionDefinition(config));
+                        return () => {
+                            void Promise.resolve(registration)
+                                .then(handle => handle.dispose())
+                                .catch((error) => {
+                                logger.warn(`tool-usage: failed to release the toolUsage projection: ${describeError(error)}`);
+                            });
+                        };
+                    }
+                    catch (error) {
+                        scope.logger.warn(`tool-usage: failed to register the toolUsage projection: ${describeError(error)}`);
+                        return () => { };
+                    }
+                });
+            }
+            catch (error) {
+                logger.warn(`tool-usage: failed to register the toolUsage projection: ${describeError(error)}`);
+                return () => { };
+            }
+            return async () => {
+                try {
+                    await fiber?.dispose?.();
+                }
+                catch (error) {
+                    logger.warn(`tool-usage: failed to dispose the toolUsage projection: ${describeError(error)}`);
+                }
+            };
+        });
+    }
     // Final flush: pending JSONL appends and the last statistics snapshot.
     ctx.effect(() => () => recorder.dispose());
+}
+/**
+ * Inject the optional `sessionProjections` service through a structural cast.
+ * Cordis resolves the service by name; the type system only lacks the optional
+ * service's augmented key when the DSH package is not imported.
+ */
+function injectSessionProjections(ctx, callback) {
+    const inject = ctx.inject;
+    return inject.call(ctx, ['sessionProjections'], callback);
 }
 /** Render a diagnostic error without relying on the host logger's placeholder formatting. */
 function describeError(error) {

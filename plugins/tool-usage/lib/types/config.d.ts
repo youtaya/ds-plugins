@@ -47,6 +47,14 @@ export interface ToolUsageConfig {
     statsWriteDebounceMs: number;
     /** Include redacted parameters in report/snapshot output. */
     includeParamsInReport: boolean;
+    /** Register the client-facing `toolUsage` session projection for the Web UI. */
+    uiEnabled: boolean;
+    /** Number of recent settled calls carried in the projection wire view. */
+    uiRecentCalls: number;
+    /** Number of recent turns carried in the projection wire view. */
+    uiRecentTurns: number;
+    /** Character cap for the shell command line carried in the projection wire view. */
+    uiCommandChars: number;
 }
 /** Default directory template, expanded against the running DSH home. */
 export declare const DEFAULT_OUTPUT_DIR = "$DSH_HOME/tool-usage";

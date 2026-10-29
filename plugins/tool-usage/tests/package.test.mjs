@@ -7,6 +7,7 @@
  * the locale metadata and the published `files` list on disk.
  */
 import { readFile, readdir, stat } from 'node:fs/promises'
+import vm from 'node:vm'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
@@ -166,7 +167,7 @@ const manifest = await readJson('package.json')
 
 test('package.json declares the expected plugin identity and module format', () => {
   assert.equal(manifest.name, 'dsh-plugin-tool-usage')
-  assert.equal(manifest.version, '0.1.0')
+  assert.equal(manifest.version, '0.2.0')
   assert.equal(manifest.type, 'module')
   assert.equal(manifest.license, 'MIT')
   assert.equal(manifest.icon, './icon.svg')
@@ -179,9 +180,35 @@ test('package.json exposes the bundle patch, locale and package.json subpaths', 
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml')
   assert.equal(manifest.exports['.'].default, './lib/index.js')
   assert.equal(manifest.exports['.'].types, './lib/types/index.d.ts')
+  assert.equal(manifest.exports['./client'], './client.js')
   assert.equal(manifest.exports['./cordis.patch.yml'], './cordis.patch.yml')
   assert.equal(manifest.exports['./locale/*.json'], './locale/*.json')
   assert.equal(manifest.exports['./package.json'], './package.json')
+})
+
+test('package.json declares the Web client half for the installed bundle', () => {
+  assert.equal(typeof manifest.dsh.client, 'object', 'dsh.client block is required for the browser half')
+  assert.equal(manifest.dsh.client.platform, 'web')
+  assert.equal(manifest.dsh.client.immediately, true)
+  assert.ok(Array.isArray(manifest.dsh.client.inject), 'dsh.client.inject must be an array')
+  assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'))
+  assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'))
+  assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-sidebar-right'))
+  assert.ok(manifest.files.includes('client.js'), 'client.js must ship in the package files list')
+})
+
+test('client.js is a parseable plain-JS module-loader bundle with no harness imports', async () => {
+  const source = await readFile(join(packageDir, 'client.js'), 'utf8')
+  assert.doesNotThrow(() => new vm.Script(source, { filename: 'client.js' }), 'client.js must parse as a script')
+  assert.match(source, /window\.__ModuleLoader__\.load\(/)
+  assert.match(source, /id:\s*['"]dsh-plugin-tool-usage['"]/)
+  assert.match(source, /factory\(require\)/)
+  // The only module-table require allowed is React; Harness Client packages are
+  // not a stable API for out-of-tree plugins.
+  const requires = [...source.matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)/g)].map(match => match[1])
+  assert.deepEqual([...new Set(requires)], ['react'])
+  assert.doesNotMatch(source, /\bimport\s+[^;]*from\s+['"]/)
+  assert.doesNotMatch(source, /@deepseek-ai\/dsh-client-/)
 })
 
 test('engines.dsh admits the pinned DSH 0.2.2-alpha.2 and rejects other minors', () => {
