@@ -1,0 +1,22 @@
+{
+  "name": "dsh-plugins",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Out-of-tree bundle plugins for the DeepSeek Harness (DSH).",
+  "license": "MIT",
+  "author": "youtaya",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/youtaya/dsh-plugins.git"
+  },
+  "engines": {
+    "node": ">=24.9.0"
+  },
+  "scripts": {
+    "build": "npm --prefix plugins/tool-usage run build",
+    "test": "npm --prefix plugins/tool-usage test",
+    "verify": "npm run build && npm test",
+    "pack:check": "npm --prefix plugins/tool-usage pack --dry-run",
+    "check:public": "node scripts/check-public.mjs"
+  }
+}

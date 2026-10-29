@@ -1,0 +1,13 @@
+[WARN] The store at <home>/Library/pnpm/store/v11 is not used because packages cannot be hard linked from it into this project. Using the store at <workspace>/.pnpm-store/v11 instead. Set storeDir to choose the store.
+Already up to date
+
+dependencies:
++ dsh-plugin-tool-usage 0.1.0 <- ../../../plugins/tool-usage
+
+[WARN] The package dsh-plugin-tool-usage, which you have just pnpm linked, has the following peerDependencies specified in its package.json:
+
+  - @deepseek-ai/cordis@>=4.0.0-0 <5.0.0,   - @deepseek-ai/dsh-tools@>=0.2.0-0 <0.3.0,   - @deepseek-ai/dsh-commands@>=0.2.0-0 <0.3.0
+
+The linked in dependency will not resolve the peer dependencies from the target node_modules.
+This might cause issues in your project. To resolve this, you may use the "file:" protocol to reference the local dependency.
+Done in 322ms using pnpm v11.28.5

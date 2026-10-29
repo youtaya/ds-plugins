@@ -1,0 +1,27 @@
+# Installed dependencies (npm dev dependencies or build-script symlinks).
+node_modules/
+
+# E2E scratch: isolated DSH home and package store, recreated by the harness.
+.e2e-home/
+.pnpm-store/
+
+# Local scratch space (npm cache, clean-install experiments, review notes).
+.tmp/
+
+# Runtime logs must never be committed. Verification evidence logs are the
+# exception: they are part of the reviewed evidence set and are re-included.
+*.log
+!plugins/*/verification/*.log
+!plugins/*/verification/**/*.log
+
+# A fresh E2E run writes new artifacts next to the reviewed evidence. Track only
+# the curated `final/` set; re-runs must not dirty the working tree.
+plugins/*/verification/e2e/artifacts/*
+!plugins/*/verification/e2e/artifacts/final/
+!plugins/*/verification/e2e/artifacts/final/**
+
+.DS_Store
+*.tsbuildinfo
+coverage/
+npm-debug.log*
+*.tgz

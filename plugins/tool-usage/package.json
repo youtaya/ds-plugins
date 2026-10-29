@@ -1,0 +1,67 @@
+{
+  "name": "dsh-plugin-tool-usage",
+  "version": "0.1.0",
+  "description": "Records every agent tool call with its arguments, a human-readable explanation, and per-tool count/latency statistics.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/**/*.js",
+    "lib/types/**/*.d.ts",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg"
+  ],
+  "icon": "./icon.svg",
+  "license": "MIT",
+  "author": "youtaya",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "tool-usage",
+    "tool-calls",
+    "observability",
+    "statistics",
+    "agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/youtaya/dsh-plugins.git",
+    "directory": "plugins/tool-usage"
+  },
+  "homepage": "https://github.com/youtaya/dsh-plugins/tree/main/plugins/tool-usage",
+  "bugs": {
+    "url": "https://github.com/youtaya/dsh-plugins/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": { "dsh": ">=0.2.0-0 <0.3.0" },
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0-0 <5.0.0",
+    "@deepseek-ai/dsh-tools": ">=0.2.0-0 <0.3.0",
+    "@deepseek-ai/dsh-commands": ">=0.2.0-0 <0.3.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.6-alpha.1",
+    "@deepseek-ai/dsh-commands": "0.2.2-alpha.2",
+    "@deepseek-ai/dsh-tools": "0.2.2-alpha.2",
+    "@types/node": "22.20.1",
+    "typescript": "6.0.3"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node --check lib/index.js",
+    "test": "node --test tests/*.test.mjs"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Tool usage statistics",
+    "description": "Records every tool call with redacted parameters and a readable explanation, and reports call counts, errors, and latency per tool.",
+    "detail": "docs/DETAIL.md"
+  }
+}

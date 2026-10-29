@@ -1,0 +1,36 @@
+PASS  [HOME-1] isolated DSH home recreated inside the workspace (live ~/.dsh untouched) — <workspace>/.e2e-home
+PASS  [PROFILE-1] headless profile initialized from the shipped template (exit 0) — exit=0 profile=<workspace>/.e2e-home/profiles/headless/package.json
+PASS  [PROFILE-2] shipped headless bundles present before installing the plugin — bundles=["@deepseek-ai/dsh-base","@deepseek-ai/dsh-headless"]
+PASS  [INSTALL-1] plugin add exits 0 and dsh-plugin-tool-usage becomes a profile dependency — exit=0 dependencies={"dsh-plugin-tool-usage":"link:<workspace>/plugins/tool-usage"}
+PASS  [INSTALL-2] profile bundles list includes dsh-plugin-tool-usage (patch layer activated) — bundles=["@deepseek-ai/dsh-base","@deepseek-ai/dsh-headless","dsh-plugin-tool-usage"]
+PASS  [DUMP-1] --dump-config shows the "# == dsh-plugin-tool-usage" layer — line 389
+PASS  [DUMP-2] layer contributes row "id: tool-usage" (name dsh-plugin-tool-usage) — - id: tool-usage |   name: dsh-plugin-tool-usage | 
+PASS  [RUN-1] main headless task exits 0 — exit=0 durationMs=4974 timedOut=false
+PASS  [LOG-1] calls-*.jsonl contains a bash record for "echo hello-tool-usage" — tool=bash status=ok durationMs=30.6 command="echo hello-tool-usage" summary="执行 Shell 命令：echo hello-tool-usage"
+PASS  [LOG-2] that bash record has status "ok" — tool=bash status=ok durationMs=30.6 command="echo hello-tool-usage" summary="执行 Shell 命令：echo hello-tool-usage"
+PASS  [LOG-3] that bash record has a numeric durationMs >= 0 — tool=bash status=ok durationMs=30.6 command="echo hello-tool-usage" summary="执行 Shell 命令：echo hello-tool-usage"
+PASS  [LOG-4] that bash record carries a non-empty human-readable explanation.summary — tool=bash status=ok durationMs=30.6 command="echo hello-tool-usage" summary="执行 Shell 命令：echo hello-tool-usage"
+PASS  [LOG-5] explanation.summary is human-readable Chinese (language default "zh") — tool=bash status=ok durationMs=30.6 command="echo hello-tool-usage" summary="执行 Shell 命令：echo hello-tool-usage"
+PASS  [LOG-6] the tool_usage tool call itself is recorded too (tool ran in-process) — tool=tool_usage status=ok durationMs=22.8 summary="调用工具 tool_usage：view=summary，scope=session"
+PASS  [STATS-1] stats.json exists and totals.calls >= 1 — totals.calls=2 tools=[]
+PASS  [OUT-1] model final answer (stdout) shows the statistics/tool result — Done. I ran exactly `echo hello-tool-usage` (output: `hello-tool-usage`), then read the session tool statistics.
+
+**Statistics received:**
+
+- **Total calls:** 1 (0 failures, total time 31 ms, average 31 ms, slowest 31 ms)
+- **Per-tool counts:**
+
+| Tool | Calls | Failures |
+| --- | --- | --- |
+| bash | 1 | 0 |
+
+The only… (535 chars)
+PASS  [LOAD-1] stderr has no plugin load/import/activation error — stderr lines=4 (reasoning stream tolerated)
+PASS  [RUN-2] failure-case headless task exits 0 (the agent run completes) — exit=0 durationMs=5800 timedOut=false
+PASS  [ERR-1] at least one new call record was appended by the failure case — new records=2 tools=["read:error","bash:ok"]
+PASS  [ERR-2] the deliberate tool error is recorded with status "error" in calls-*.jsonl — tool=read status=error durationMs=10.6 summary="读取文件 /nonexistent-e2e-error-case/file.txt"
+PASS  [ERR-3] the deliberate failing bash call (`exit 3`) is recorded — tool=bash status=ok durationMs=38 command="exit 3" summary="执行 Shell 命令：exit 3" (DSH reports a non-zero exit as a normal tool result, so this record's status is "ok"; the genuine isError record is asserted above via the read failure)
+PASS  [ERR-4] stats.json reflects the failure (totals.errors >= 1) and survived the run — totals.calls=4 totals.errors=1
+PASS  [ERR-5] failure-case stderr has no plugin load/import/activation error — clean
+
+SUMMARY: 23 passed, 0 failed, 23 assertions

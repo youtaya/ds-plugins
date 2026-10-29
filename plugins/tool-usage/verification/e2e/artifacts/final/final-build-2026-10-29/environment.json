@@ -1,0 +1,11 @@
+{
+  "generatedAt": "2026-10-29T02:20:07.547Z",
+  "node": "v24.19.0",
+  "platform": "darwin arm64",
+  "workspace": "<workspace>",
+  "checkout": "<dsh-checkout>",
+  "e2eHome": "<workspace>/.e2e-home",
+  "taskPermissionMode": "danger-full-access",
+  "pluginEntry": "<workspace>/plugins/tool-usage/lib/index.js",
+  "pluginEntryMtime": "2026-10-29T02:19:41.673Z"
+}

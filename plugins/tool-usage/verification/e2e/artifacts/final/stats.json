@@ -1,0 +1,217 @@
+{
+  "v": 1,
+  "updatedAt": "2026-10-28T09:07:28.654Z",
+  "totals": {
+    "calls": 7,
+    "errors": 4,
+    "totalMs": 189.4,
+    "maxMs": 50,
+    "slowCalls": 0,
+    "statusCounts": {
+      "ok": 3,
+      "error": 4,
+      "aborted": 0,
+      "threw": 0
+    }
+  },
+  "byTool": {
+    "bash": {
+      "calls": 4,
+      "errors": 3,
+      "totalMs": 135.1,
+      "minMs": 8.4,
+      "maxMs": 50,
+      "lastMs": 50,
+      "lastAt": "2026-10-28T09:07:27.856Z",
+      "slowCalls": 0,
+      "statusCounts": {
+        "ok": 1,
+        "error": 3,
+        "aborted": 0,
+        "threw": 0
+      }
+    },
+    "tool_usage": {
+      "calls": 2,
+      "errors": 0,
+      "totalMs": 23.8,
+      "minMs": 9.2,
+      "maxMs": 14.6,
+      "lastMs": 9.2,
+      "lastAt": "2026-10-28T09:07:28.644Z",
+      "slowCalls": 0,
+      "statusCounts": {
+        "ok": 2,
+        "error": 0,
+        "aborted": 0,
+        "threw": 0
+      }
+    },
+    "read": {
+      "calls": 1,
+      "errors": 1,
+      "totalMs": 30.5,
+      "minMs": 30.5,
+      "maxMs": 30.5,
+      "lastMs": 30.5,
+      "lastAt": "2026-10-28T09:06:10.343Z",
+      "slowCalls": 0,
+      "statusCounts": {
+        "ok": 0,
+        "error": 1,
+        "aborted": 0,
+        "threw": 0
+      }
+    }
+  },
+  "bySession": {
+    "session-b61a246a-5c3e-4580-8fe7-91a4d9a1cb19": {
+      "totals": {
+        "calls": 3,
+        "errors": 2,
+        "totalMs": 70.7,
+        "maxMs": 47.7,
+        "slowCalls": 0,
+        "statusCounts": {
+          "ok": 1,
+          "error": 2,
+          "aborted": 0,
+          "threw": 0
+        }
+      },
+      "byTool": {
+        "bash": {
+          "calls": 2,
+          "errors": 2,
+          "totalMs": 56.1,
+          "minMs": 8.4,
+          "maxMs": 47.7,
+          "lastMs": 8.4,
+          "lastAt": "2026-10-28T09:06:03.317Z",
+          "slowCalls": 0,
+          "statusCounts": {
+            "ok": 0,
+            "error": 2,
+            "aborted": 0,
+            "threw": 0
+          }
+        },
+        "tool_usage": {
+          "calls": 1,
+          "errors": 0,
+          "totalMs": 14.6,
+          "minMs": 14.6,
+          "maxMs": 14.6,
+          "lastMs": 14.6,
+          "lastAt": "2026-10-28T09:06:04.869Z",
+          "slowCalls": 0,
+          "statusCounts": {
+            "ok": 1,
+            "error": 0,
+            "aborted": 0,
+            "threw": 0
+          }
+        }
+      }
+    },
+    "session-f583cc37-4cc3-437f-aa60-f93ce2dc48c4": {
+      "totals": {
+        "calls": 2,
+        "errors": 2,
+        "totalMs": 59.5,
+        "maxMs": 30.5,
+        "slowCalls": 0,
+        "statusCounts": {
+          "ok": 0,
+          "error": 2,
+          "aborted": 0,
+          "threw": 0
+        }
+      },
+      "byTool": {
+        "read": {
+          "calls": 1,
+          "errors": 1,
+          "totalMs": 30.5,
+          "minMs": 30.5,
+          "maxMs": 30.5,
+          "lastMs": 30.5,
+          "lastAt": "2026-10-28T09:06:10.343Z",
+          "slowCalls": 0,
+          "statusCounts": {
+            "ok": 0,
+            "error": 1,
+            "aborted": 0,
+            "threw": 0
+          }
+        },
+        "bash": {
+          "calls": 1,
+          "errors": 1,
+          "totalMs": 29,
+          "minMs": 29,
+          "maxMs": 29,
+          "lastMs": 29,
+          "lastAt": "2026-10-28T09:06:11.170Z",
+          "slowCalls": 0,
+          "statusCounts": {
+            "ok": 0,
+            "error": 1,
+            "aborted": 0,
+            "threw": 0
+          }
+        }
+      }
+    },
+    "session-b7c358e2-422d-4e66-bfdc-5848a0906d46": {
+      "totals": {
+        "calls": 2,
+        "errors": 0,
+        "totalMs": 59.2,
+        "maxMs": 50,
+        "slowCalls": 0,
+        "statusCounts": {
+          "ok": 2,
+          "error": 0,
+          "aborted": 0,
+          "threw": 0
+        }
+      },
+      "byTool": {
+        "bash": {
+          "calls": 1,
+          "errors": 0,
+          "totalMs": 50,
+          "minMs": 50,
+          "maxMs": 50,
+          "lastMs": 50,
+          "lastAt": "2026-10-28T09:07:27.856Z",
+          "slowCalls": 0,
+          "statusCounts": {
+            "ok": 1,
+            "error": 0,
+            "aborted": 0,
+            "threw": 0
+          }
+        },
+        "tool_usage": {
+          "calls": 1,
+          "errors": 0,
+          "totalMs": 9.2,
+          "minMs": 9.2,
+          "maxMs": 9.2,
+          "lastMs": 9.2,
+          "lastAt": "2026-10-28T09:07:28.644Z",
+          "slowCalls": 0,
+          "statusCounts": {
+            "ok": 1,
+            "error": 0,
+            "aborted": 0,
+            "threw": 0
+          }
+        }
+      }
+    }
+  },
+  "sessionCount": 3
+}

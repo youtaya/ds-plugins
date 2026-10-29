@@ -1,0 +1,15 @@
+Done. I ran exactly `echo hello-tool-usage` (output: `hello-tool-usage`), then called `tool_usage` with the requested parameters.
+
+**Tool statistics (session scope):**
+
+- **Total calls:** 1
+- **Failed calls:** 0
+- **Total elapsed:** 50 ms / average 50 ms / slowest 50 ms
+
+**Per-tool call counts:**
+
+| Tool | Calls | Failures | Average | Slowest | Most recent |
+| --- | --- | --- | --- | --- | --- |
+| bash | 1 | 0 | 50 ms | 50 ms | 17:07:27 |
+
+Note: the statistics report only counted the `bash` call — the `tool_usage` call itself isn't included in its own recorded totals (it reflects 1 call at the time it read the log).

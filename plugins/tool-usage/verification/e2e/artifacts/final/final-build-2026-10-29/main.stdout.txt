@@ -1,0 +1,12 @@
+Done. I ran exactly `echo hello-tool-usage` (output: `hello-tool-usage`), then read the session tool statistics.
+
+**Statistics received:**
+
+- **Total calls:** 1 (0 failures, total time 31 ms, average 31 ms, slowest 31 ms)
+- **Per-tool counts:**
+
+| Tool | Calls | Failures |
+| --- | --- | --- |
+| bash | 1 | 0 |
+
+The only recorded call was the `bash` invocation of `echo hello-tool-usage` at 10:20:13. The `tool_usage` call itself is not included in the snapshot it returned (it was still executing), so the total reads 1 rather than 2.

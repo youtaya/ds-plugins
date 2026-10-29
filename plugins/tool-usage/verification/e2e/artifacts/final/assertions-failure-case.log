@@ -1,0 +1,6 @@
+PASS  [RUN-2] failure-case headless task exits 0 (the agent run completes) — exit=0 durationMs=6288 timedOut=false
+PASS  [ERR-1] at least one new call record was appended by the failure case — new records=2 tools=["read:error","bash:error"]
+PASS  [ERR-2] the deliberate tool error is recorded with status "error" in calls-*.jsonl — tool=read status=error durationMs=30.5 summary="读取文件 /nonexistent-e2e-error-case/file.txt"
+PASS  [ERR-3] the deliberate failing bash call (`exit 3`) is recorded — tool=bash status=error durationMs=29 command="exit 3" summary="执行 Shell 命令：exit 3" (non-zero exit is a normal DSH result, reported as status "ok"; the error-status record above comes from the read failure)
+PASS  [ERR-4] stats.json reflects the failure (totals.errors >= 1) and survived the run — totals.calls=5 totals.errors=4
+PASS  [ERR-5] failure-case stderr has no plugin load/import/activation error — clean

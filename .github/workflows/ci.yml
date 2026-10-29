@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build, test, and release checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: plugins/tool-usage/package-lock.json
+
+      - name: Install plugin dev dependencies
+        working-directory: plugins/tool-usage
+        run: npm ci --no-audit --no-fund
+
+      - name: Build plugin
+        working-directory: plugins/tool-usage
+        run: npm run build
+
+      - name: Committed lib/ is up to date
+        run: |
+          if ! git diff --quiet -- plugins/tool-usage/lib; then
+            git diff --stat -- plugins/tool-usage/lib
+            echo "::error::lib/ is stale. Run 'npm run build' in plugins/tool-usage and commit the rebuilt output."
+            exit 1
+          fi
+
+      - name: Unit tests
+        working-directory: plugins/tool-usage
+        run: npm test
+
+      - name: Package contents
+        working-directory: plugins/tool-usage
+        run: npm pack --dry-run
+
+      - name: Public-release hygiene
+        run: node scripts/check-public.mjs

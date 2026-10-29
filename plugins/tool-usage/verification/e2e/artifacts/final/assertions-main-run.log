@@ -1,0 +1,28 @@
+PASS  [PROFILE-1] headless profile initialized from the shipped template (exit 0) — exit=0 profile=<e2e-home>/profiles/headless/package.json
+PASS  [PROFILE-2] shipped headless bundles present before installing the plugin — bundles=["@deepseek-ai/dsh-base","@deepseek-ai/dsh-headless","dsh-plugin-tool-usage"]
+PASS  [INSTALL-1] plugin add exits 0 and dsh-plugin-tool-usage becomes a profile dependency — exit=0 dependencies={"dsh-plugin-tool-usage":"link:<workspace>/plugins/tool-usage"}
+PASS  [INSTALL-2] profile bundles list includes dsh-plugin-tool-usage (patch layer activated) — bundles=["@deepseek-ai/dsh-base","@deepseek-ai/dsh-headless","dsh-plugin-tool-usage"]
+PASS  [DUMP-1] --dump-config shows the "# == dsh-plugin-tool-usage" layer — line 389
+PASS  [DUMP-2] layer contributes row "id: tool-usage" (name dsh-plugin-tool-usage) — - id: tool-usage |   name: dsh-plugin-tool-usage | 
+PASS  [RUN-1] main headless task exits 0 — exit=0 durationMs=5515 timedOut=false
+PASS  [LOG-1] calls-*.jsonl contains a bash record for "echo hello-tool-usage" — tool=bash status=ok durationMs=50 command="echo hello-tool-usage" summary="执行 Shell 命令：echo hello-tool-usage"
+PASS  [LOG-2] that bash record has status "ok" — tool=bash status=ok durationMs=50 command="echo hello-tool-usage" summary="执行 Shell 命令：echo hello-tool-usage"
+PASS  [LOG-3] that bash record has a numeric durationMs >= 0 — tool=bash status=ok durationMs=50 command="echo hello-tool-usage" summary="执行 Shell 命令：echo hello-tool-usage"
+PASS  [LOG-4] that bash record carries a non-empty human-readable explanation.summary — tool=bash status=ok durationMs=50 command="echo hello-tool-usage" summary="执行 Shell 命令：echo hello-tool-usage"
+PASS  [LOG-5] explanation.summary is human-readable Chinese (language default "zh") — tool=bash status=ok durationMs=50 command="echo hello-tool-usage" summary="执行 Shell 命令：echo hello-tool-usage"
+PASS  [LOG-6] the tool_usage tool call itself is recorded too (tool ran in-process) — tool=tool_usage status=ok durationMs=9.2 summary="调用工具 tool_usage：view=summary，scope=session"
+PASS  [STATS-1] stats.json exists and totals.calls >= 1 — totals.calls=7 tools=[]
+PASS  [OUT-1] model final answer (stdout) shows the statistics/tool result — Done. I ran exactly `echo hello-tool-usage` (output: `hello-tool-usage`), then called `tool_usage` with the requested parameters.
+
+**Tool statistics (session scope):**
+
+- **Total calls:** 1
+- **Failed calls:** 0
+- **Total elapsed:** 50 ms / average 50 ms / slowest 50 ms
+
+**Per-tool call counts:**
+
+| Tool | Calls | Fail… (623 chars)
+PASS  [LOAD-1] stderr has no plugin load/import/activation error — stderr lines=4 (reasoning stream tolerated)
+
+SUMMARY: 16 passed, 0 failed, 16 assertions

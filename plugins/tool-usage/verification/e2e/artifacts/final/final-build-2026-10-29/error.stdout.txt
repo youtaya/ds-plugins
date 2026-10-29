@@ -1,0 +1,18 @@
+Both calls completed as requested, with no retries and no other tools.
+
+**1. `read` on `/nonexistent-e2e-error-case/file.txt`**
+
+Error result:
+```
+Error: cannot read "/nonexistent-e2e-error-case/file.txt": not found
+```
+The file was not created.
+
+**2. `bash` running `exit 3`**
+
+No output; the tool reported:
+```
+[exit code: 3]
+```
+
+So: the read failed with a "not found" error, and the bash command exited with status **3**.

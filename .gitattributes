@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.webp binary
+
+# Build output and raw verification evidence are generated, not reviewed.
+plugins/*/lib/** linguist-generated=true
+plugins/*/verification/e2e/artifacts/** linguist-generated=true
